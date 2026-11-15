@@ -14,7 +14,7 @@ def _plan():
     )
 
 
-def test_unmanaged_override_blocks_even_with_matching_dnf_values(tmp_path):
+def test_dnf_managed_override_is_recognized_but_writes_remain_blocked(tmp_path):
     report = ConfigReport("fedora", (
         SettingFinding("baseurl", (
             SettingOrigin("/etc/dnf/repos.override.d/99-config_manager.repo",
@@ -29,7 +29,8 @@ def test_unmanaged_override_blocks_even_with_matching_dnf_values(tmp_path):
         _plan(), report, effective, override_dir=tmp_path,
     )
     assert not result.allowed
-    assert any("99-config_manager.repo" in reason for reason in result.reasons)
+    assert not any("Other override" in reason for reason in result.reasons)
+    assert any("privileged writer" in reason for reason in result.reasons)
     assert "WRITE BLOCKED" in format_write_preflight(result)
 
 
@@ -59,3 +60,18 @@ def test_no_conflicts_still_blocks_until_privileged_writer_is_ready(tmp_path):
     )
     assert not result.allowed
     assert any("privileged writer" in reason for reason in result.reasons)
+
+
+def test_other_override_is_flagged(tmp_path):
+    report = ConfigReport("fedora", (
+        SettingFinding("baseurl", (
+            SettingOrigin("/etc/dnf/repos.override.d/90-other.repo",
+                          "https://other.example.org/fedora/", "override fragment"),
+        ), "single definition"),
+    ), ())
+    effective = EffectiveConfig("fedora", {
+        "baseurl": "https://old.example.org/fedora/44/", "enabled": "1",
+    })
+    result = assess_write_preflight(_plan(), report, effective, override_dir=tmp_path)
+    assert not result.allowed
+    assert any("90-other.repo" in reason for reason in result.reasons)
