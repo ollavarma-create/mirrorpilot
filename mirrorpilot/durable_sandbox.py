@@ -82,9 +82,15 @@ class DurableSandboxTransaction:
         else:
             if contents is not None or data.get("mode") is not None:
                 raise ValueError("Invalid absent-file backup")
+        if doc.get("version") == 2:
+            digest = doc.get("expected_after_sha256")
+            if not isinstance(digest, str) or len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest):
+                raise ValueError("Invalid expected after hash")
+        elif doc.get("version") != 1:
+            raise ValueError("Unknown journal version")
         return doc
 
-    def _save(self, state: str, before: Snapshot) -> None:
+    def _save(self, state: str, before: Snapshot, expected_after: bytes | None = None) -> None:
         if state not in STATES:
             raise ValueError("Invalid transaction state")
         backup = {
@@ -93,7 +99,7 @@ class DurableSandboxTransaction:
             "mode": before.mode,
             "sha256": hashlib.sha256(before.contents).hexdigest() if before.existed else None,
         }
-        _write_atomic(self.journal, json.dumps({"version": 1, "state": state, "backup": backup},
+        _write_atomic(self.journal, json.dumps({"version": 2, "state": state, "backup": backup,\n                                                "expected_after_sha256": hashlib.sha256(expected_after).hexdigest() if expected_after is not None else None},
                                                 sort_keys=True).encode("utf-8"))
 
     def _backup(self, doc: dict) -> Snapshot:
@@ -113,7 +119,24 @@ class DurableSandboxTransaction:
             return "clean"
         if doc["state"] == "VERIFIED":
             return "verified"
-        self.tx.restore(self._backup(doc))
+        if doc.get("version") != 2:
+            raise RuntimeError("Legacy journal cannot be safely recovered automatically")
+        before = self._backup(doc)
+        current = self.tx._snapshot()
+        if current.existed:
+            current_hash = hashlib.sha256(current.contents).hexdigest()
+            if (before.existed and current.contents == before.contents
+                    and current.mode == before.mode):
+                # No mutation visible; do not overwrite a file unnecessarily.
+                self.journal.unlink()
+                _sync_directory(self.tx.root)
+                return "unchanged"
+            if current_hash != doc["expected_after_sha256"]:
+                raise RuntimeError("Recovery conflict: target differs from expected write")
+        elif before.existed:
+            raise RuntimeError("Recovery conflict: original target disappeared")
+        # This is a sandbox-only content guard, not a race-free production CAS.
+        self.tx.restore(before)
         _sync_directory(self.tx.root)
         self.journal.unlink()
         _sync_directory(self.tx.root)
@@ -127,7 +150,7 @@ class DurableSandboxTransaction:
         if not isinstance(new_contents, bytes) or len(new_contents) > 1024 * 1024:
             raise ValueError("Invalid sandbox payload")
         before = self.tx._snapshot()
-        self._save("PREPARED", before)
+        self._save("PREPARED", before, new_contents)
         if checkpoint:
             checkpoint("PREPARED")
         try:
@@ -135,12 +158,12 @@ class DurableSandboxTransaction:
             _sync_directory(self.tx.root)
             if checkpoint:
                 checkpoint("TARGET_REPLACED")
-            self._save("APPLIED", before)
+            self._save("APPLIED", before, new_contents)
             if checkpoint:
                 checkpoint("APPLIED")
             if not verify(self.tx.target):
                 raise RuntimeError("Verification failed")
-            self._save("VERIFIED", before)
+            self._save("VERIFIED", before, new_contents)
         except Exception:
             self.recover()
             raise
