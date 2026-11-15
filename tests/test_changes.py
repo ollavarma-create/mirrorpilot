@@ -71,3 +71,30 @@ def test_preview_does_not_propose_competing_fragment():
     assert "DNF5-managed override" in output
     assert "config-manager setopt" in output
     assert "PREVIEW ONLY" in output
+
+
+def test_fedora45_packaged_repo_preview():
+    source = "/usr/share/dnf5/repos.d/fedora.repo"
+    plan = build_change_plan(
+        "fedora", "https://old.example.org/fedora/linux/releases/45/Everything/x86_64/os/",
+        "https://new.example.org/fedora/linux/releases/45/Everything/x86_64/os/",
+        source, target_release="45", installed_release="45",
+    )
+    assert plan.source_file == source
+    assert "$releasever" in plan.preview
+    assert plan.target_file == "/etc/dnf/repos.override.d/99-config_manager.repo"
+
+
+@pytest.mark.parametrize("source", [
+    "/usr/share/dnf5/repos.d/../evil.repo",
+    "/usr/share/dnf5/repos.d/nested/fedora.repo",
+    "/usr/share/dnf5/repos.d/fedora.txt",
+    "/tmp/fedora.repo",
+])
+def test_fedora45_preview_rejects_unexpected_source_paths(source):
+    with pytest.raises(ValueError, match="source configuration path"):
+        build_change_plan(
+            "fedora", "",
+            "https://new.example.org/fedora/linux/releases/45/Everything/x86_64/os/",
+            source, target_release="45", installed_release="45",
+        )

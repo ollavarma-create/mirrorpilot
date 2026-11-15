@@ -106,10 +106,12 @@ def build_change_plan(repo_id: str, current_url: str, proposed_url: str,
     if not _REPO_ID.fullmatch(repo_id) or repo_id not in ALLOWED_REPOS:
         raise ValueError("Only Fedora release and updates are supported")
     proposed = validate_mirror_url(proposed_url)
-    if not source_file.startswith("/etc/yum.repos.d/"):
+    allowed_source_dirs = (Path("/etc/yum.repos.d"), Path("/usr/share/dnf5/repos.d"))
+    source_path = Path(source_file)
+    if (source_path.parent not in allowed_source_dirs
+            or source_path.suffix != ".repo"
+            or source_path.name in ("", ".", "..")):
         raise ValueError("Unexpected source configuration path")
-    if Path(source_file).name != source_file.removeprefix("/etc/yum.repos.d/"):
-        raise ValueError("Invalid source configuration path")
     persistent = persistent_mirror_url(repo_id, proposed, target_release)
     if current_url == persistent:
         raise ValueError("Proposed version-independent mirror is already configured")
