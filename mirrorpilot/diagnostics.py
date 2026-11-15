@@ -120,3 +120,43 @@ def run_diagnostics(release: str, metadata_count: int = 1, repo: str = "fedora",
         rows[i] = MirrorHealth(row.speed, row.index, metadata)
         emit("metadata", done, min(metadata_count, len(candidates)), row.speed.country)
     return rows
+
+
+def check_current_repository(release: str, repo: str = "fedora",
+                             configured_base: str | None = None, progress=None):
+    """Check one configured source without speed sampling or mirror discovery.
+
+    Checks the Fedora reference index and the three selected referenced
+    metadata files. This may transfer substantial data but does not download
+    benchmark samples or access the alternative-mirror registry.
+    """
+    if repo not in ("fedora", "updates"):
+        raise ValueError("Unsupported repository")
+    if not configured_base:
+        return []
+    base = configured_base.strip().rstrip("/") + "/"
+    if _base_from_metalink(base + "repodata/repomd.xml") != base:
+        raise ValueError("Configured source must be a concrete HTTPS repository URL")
+    def emit(phase, done, total, detail=""):
+        if progress:
+            progress(phase, done, total, detail)
+    emit("current", 0, 1, base)
+    # No 2 MiB x 3 samples: index retrieval is the availability check.
+    index = _index_safely(MirrorResult(base, "Configured", "measured", None, None, 0,
+                                      "Availability/index check only; speed not measured"),
+                          release, repo)
+    metadata = None
+    if index.status in ("index-match", "different"):
+        try:
+            metadata = audit_referenced(
+                base, "Configured", release,
+                progress=lambda kind, n, total, done, size:
+                emit("bytes", n, total, f"Current {kind}: {done}/{size} bytes"))
+        except Exception as exc:
+            metadata = AuditResult("error", f"Metadata check interrupted: {exc}", base)
+    # A missing index is an actual failure, not an unverified speed result.
+    status = "error" if index.status in ("missing", "error", "timeout") else "measured"
+    detail = index.message if status == "error" else "Availability/index check only; speed not measured"
+    speed = MirrorResult(base, "Configured", status, None, None, 0, detail)
+    emit("current", 1, 1, base)
+    return [MirrorHealth(speed, index, metadata)]
