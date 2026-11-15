@@ -191,3 +191,27 @@ requests again on the privileged side, use trusted executable paths, prevent
 symlink/path races, serialize writes against other DNF configuration changes,
 preserve file metadata, and prove durable recovery. Never pass GUI-generated
 shell commands or filesystem paths to a root helper.
+
+## Minimal helper protocol prototype (unprivileged, no writes)
+
+`mirrorpilot/helper_protocol.py` defines a versioned JSON request with
+**exactly** four fields: `version: 1`, `action: "set-mirror"`,
+`repository: "fedora" | "updates"`, and a validated `baseurl`.
+Unknown fields, duplicate keys, unsupported actions and oversized requests
+are rejected. The parser constructs a fixed DNF5 argument vector for
+inspection, but **does not execute it**.
+
+Try the unprivileged dry-run entry point:
+
+```bash
+printf '%s' '{"version":1,"action":"set-mirror","repository":"fedora","baseurl":"https://mirrors.xtom.ee/fedora/releases/44/Everything/x86_64/os/"}' | python -m mirrorpilot.helper_dry_run
+python -m pytest tests/test_helper_protocol.py -v
+```
+
+The dry-run explicitly refuses execution as root. It does not invoke Polkit,
+DNF5, or change any configuration. A production privileged helper must
+revalidate all fields, constrain process environment and execution, ensure
+trusted inputs and filesystem boundaries, implement durable pre-write recovery,
+and verify effective DNF5 values before any writes are enabled. The
+argument vector is **not** a shell command and must never be executed through
+a shell. The existing sandbox recovery experiment is not a production writer.
