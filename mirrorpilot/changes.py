@@ -15,7 +15,7 @@ import re
 from mirrorpilot.repos import _version
 
 ALLOWED_REPOS = frozenset({"fedora", "updates"})
-OVERRIDE_PATH = Path("/etc/dnf/repos.override.d/99_mirrorpilot.repo")
+OVERRIDE_PATH = Path("/etc/dnf/repos.override.d/99-config_manager.repo")
 _REPO_ID = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
 
 
@@ -89,7 +89,8 @@ def build_change_plan(repo_id: str, current_url: str, proposed_url: str,
         raise ValueError("Unexpected source configuration path")
     if Path(source_file).name != source_file.removeprefix("/etc/yum.repos.d/"):
         raise ValueError("Invalid source configuration path")
-    preview = f"[{repo_id}]\nbaseurl={proposed}\nmetalink=\nmirrorlist=\n"
+    preview = (f"dnf5 config-manager setopt {repo_id}.baseurl={proposed} "
+               f"{repo_id}.metalink= {repo_id}.mirrorlist=")
     return ChangePlan(
         repo_id=repo_id, current_url=current_url or "(not configured)",
         proposed_url=proposed, source_file=source_file,
@@ -97,7 +98,8 @@ def build_change_plan(repo_id: str, current_url: str, proposed_url: str,
         installed_release=installed, target_release=target_release,
         warnings=(
             "Preview only: nothing has been written or backed up.",
-            "A privileged helper must verify DNF5 precedence and the exact existing override before applying.",
+            "DNF5 config-manager owns the override; no competing MirrorPilot fragment is created.",
+            "A privileged helper must snapshot and verify the existing config-manager override before applying.",
             "Backup, authorization, atomic replacement, validation and rollback are required before enabling Apply.",
         ),
     )
@@ -110,7 +112,7 @@ def format_change_plan(plan: ChangePlan) -> str:
         f"Current: {plan.current_url}\n"
         f"Proposed: {plan.proposed_url}\n"
         f"Configured in: {plan.source_file}\n"
-        f"Planned override: {plan.target_file}\n\n"
-        f"Proposed override section:\n{plan.preview}\n"
+        f"DNF5-managed override (not directly edited): {plan.target_file}\n\n"
+        f"Proposed DNF5 operation (illustrative, not executed):\n{plan.preview}\n"
         + "\n".join(f"• {warning}" for warning in plan.warnings)
     )
