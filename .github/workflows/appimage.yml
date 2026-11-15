@@ -44,6 +44,7 @@ jobs:
           test -x dist/MirrorPilot.AppDir/AppRun
           test -x dist/MirrorPilot.AppDir/usr/bin/mirrorpilot
           test -f dist/MirrorPilot.AppDir/io.github.ollavarma_create.MirrorPilot.desktop
+          test -f dist/MirrorPilot.AppDir/usr/share/applications/io.github.ollavarma_create.MirrorPilot.desktop
           test -f dist/MirrorPilot.AppDir/mirrorpilot.svg
           test -s dist/MirrorPilot.AppDir/mirrorpilot.png
           test -e dist/MirrorPilot.AppDir/.DirIcon
