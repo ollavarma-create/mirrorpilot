@@ -72,7 +72,18 @@ class MainWindow(QMainWindow):
         layout.addWidget(QLabel("Configured repositories"))
         self.table = QTableWidget(0, 4)
         self.table.setHorizontalHeaderLabels(["Repository", "Status", "Effective source", "Config file"])
-        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        # Keep every column user-resizable. Stretch would lock Effective source
+        # and could push Config file off-screen without a usable horizontal scroll.
+        header = self.table.horizontalHeader()
+        header.setStretchLastSection(False)
+        header.setSectionsMovable(True)
+        for col in range(4):
+            header.setSectionResizeMode(col, QHeaderView.ResizeMode.Interactive)
+        self.table.setColumnWidth(0, 170)
+        self.table.setColumnWidth(1, self.table.fontMetrics().horizontalAdvance(" disabled ") + 20)
+        self.table.setColumnWidth(2, 440)
+        self.table.setColumnWidth(3, 240)
+        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setMaximumHeight(155)
