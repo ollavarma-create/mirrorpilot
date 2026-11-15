@@ -27,6 +27,7 @@ class Repo:
     metalink: str
     mirrorlist: str
     filename: str
+    raw_baseurl: str = ""
 
     @property
     def source(self) -> str:
@@ -99,6 +100,7 @@ def get_repositories(releasever: str | None = None) -> list[Repo]:
             metalink=_expand(data.get("metalink", ""), version),
             mirrorlist=_expand(data.get("mirrorlist", ""), version),
             filename=origins[repo_id],
+            raw_baseurl=data.get("baseurl", ""),
         )
         for repo_id, data in sorted(records.items())
     ]
