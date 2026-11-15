@@ -9,7 +9,7 @@ fi
 VERSION="$(python -c 'import importlib.metadata; print(importlib.metadata.version("mirrorpilot"))')"
 mkdir -p dist
 python -m PyInstaller --noconfirm --clean --onedir \
-  --name mirrorpilot --collect-all PySide6 \
+  --name mirrorpilot --collect-all PySide6 --hidden-import mirrorpilot.tls_diagnostics \
   mirrorpilot/__main__.py
 APPDIR="$ROOT/dist/MirrorPilot.AppDir"
 mkdir -p "$APPDIR/usr/bin" "$APPDIR/usr/share/icons/hicolor/scalable/apps"
