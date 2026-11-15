@@ -199,7 +199,7 @@ class MainWindow(QMainWindow):
         self.mirrors.setRowCount(0)
         self.scan_repo = self.repo_choice.currentData()
         self.scan_release = self.version.text().strip() or _version()
-        self.run_job(run_diagnostics, (self.scan_release, None, 1, self.scan_repo),
+        self.run_job(run_diagnostics, (self.scan_release, 1, self.scan_repo),
                      self.scan_finished, self.scan_progress)
 
     def scan_finished(self, results, error):
