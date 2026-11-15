@@ -14,7 +14,7 @@ python -m PyInstaller --noconfirm --clean --onedir \
 APPDIR="$ROOT/dist/MirrorPilot.AppDir"
 mkdir -p "$APPDIR/usr/bin" "$APPDIR/usr/share/icons/hicolor/scalable/apps"
 cp -a "$ROOT/dist/mirrorpilot/." "$APPDIR/usr/bin/"
-cp "$ROOT/packaging/mirrorpilot.desktop" "$APPDIR/mirrorpilot.desktop"
+cp "$ROOT/packaging/io.github.ollavarma_create.MirrorPilot.desktop" "$APPDIR/io.github.ollavarma_create.MirrorPilot.desktop"
 mkdir -p "$APPDIR/usr/share/metainfo"
 cp "$ROOT/packaging/mirrorpilot.appdata.xml" "$APPDIR/usr/share/metainfo/mirrorpilot.appdata.xml"
 cp "$ROOT/assets/mirrorpilot.svg" "$APPDIR/mirrorpilot.svg"
