@@ -14,11 +14,21 @@ python -m PyInstaller --noconfirm --clean --onedir \
 APPDIR="$ROOT/dist/MirrorPilot.AppDir"
 mkdir -p "$APPDIR/usr/bin" "$APPDIR/usr/share/icons/hicolor/scalable/apps" "$APPDIR/usr/share/applications"
 cp -a "$ROOT/dist/mirrorpilot/." "$APPDIR/usr/bin/"
-# Bundle fontconfig rules matching the bundled Ubuntu libfontconfig.
-# Keep font discovery on the host via /usr/share/fonts and ~/.local/share/fonts.
+# Minimal self-contained fontconfig configuration: use host fonts, not host rules.
+# Avoid newer host XML rules that the bundled fontconfig cannot parse.
 mkdir -p "$APPDIR/usr/etc/fonts"
-cp -a /etc/fonts/fonts.conf /etc/fonts/conf.d "$APPDIR/usr/etc/fonts/"
-
+cat > "$APPDIR/usr/etc/fonts/fonts.conf" <<'FONTCONFIG_EOF'
+<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+<fontconfig>
+  <dir>/usr/share/fonts</dir>
+  <dir>/usr/local/share/fonts</dir>
+  <dir prefix="xdg">fonts</dir>
+  <dir>~/.fonts</dir>
+  <cachedir prefix="xdg">fontconfig</cachedir>
+  <cachedir>~/.cache/fontconfig</cachedir>
+</fontconfig>
+FONTCONFIG_EOF
 cp "$ROOT/packaging/io.github.ollavarma_create.MirrorPilot.desktop" "$APPDIR/io.github.ollavarma_create.MirrorPilot.desktop"
 cp "$ROOT/packaging/io.github.ollavarma_create.MirrorPilot.desktop" "$APPDIR/usr/share/applications/io.github.ollavarma_create.MirrorPilot.desktop"
 mkdir -p "$APPDIR/usr/share/metainfo" "$APPDIR/usr/share/applications"
