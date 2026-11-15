@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import sys
 from dataclasses import replace
-from PySide6.QtCore import QObject, QThread, Signal, Slot, QTimer, Qt, QProcess
+from PySide6.QtCore import QObject, QThread, Signal, Slot, QTimer, Qt
 from PySide6.QtGui import QColor, QBrush
 from PySide6.QtWidgets import (
     QApplication, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow,
@@ -17,12 +17,10 @@ from mirrorpilot.releases import available_targets
 from mirrorpilot.audit import audit_referenced
 from mirrorpilot.diagnostics import run_diagnostics, check_current_repository, fastest_verified, explain_source
 from mirrorpilot.summary import summary_lines
-from mirrorpilot.changes import build_change_plan, format_change_plan, release_change_allowed
-from mirrorpilot.polkit_probe import parse_probe_response
+from mirrorpilot.changes import build_change_plan, release_change_allowed
+from mirrorpilot.manual_edit import prepare_manual_edit, verify_effective_values
 from mirrorpilot.config_conflicts import inspect_configuration, format_config_report
 from mirrorpilot.dnf_effective import read_effective_config, format_effective_comparison
-from mirrorpilot.write_preflight import assess_write_preflight, format_write_preflight
-from mirrorpilot.write_policy import validate_request, preview_options
 
 class Worker(QObject):
     finished = Signal(object, object)
@@ -52,7 +50,6 @@ class MainWindow(QMainWindow):
         self.threads = []
         self.workers = []
         self.running = False
-        self.auth_process = None
         self.spinner = 0
         self.progress_text = "Finding mirrors…"
         self.timer = QTimer(self)
@@ -156,8 +153,8 @@ class MainWindow(QMainWindow):
         self.verify_button.setText("Verify selected metadata")
         self.verify_button.setToolTip("Verify up to 3 referenced metadata files for the selected mirror (up to 512 MiB each). Read-only.")
         layout.addWidget(self.verify_button)
-        self.preview_button = QPushButton("Preview configuration change…")
-        self.preview_button.setToolTip("Preview a verified mirror. When the diagnostic release differs from the installed Fedora, configuration changes are blocked.")
+        self.preview_button = QPushButton("Manual configuration instructions…")
+        self.preview_button.setToolTip("Show copyable settings and manual editing instructions. MirrorPilot never writes DNF configuration.")
         self.preview_button.setEnabled(False)
         self.preview_button.clicked.connect(self.preview_change)
         layout.addWidget(self.preview_button)
@@ -441,83 +438,53 @@ class MainWindow(QMainWindow):
         except ValueError as exc:
             QMessageBox.warning(self, "Preview unavailable", str(exc))
             return
-        try:
-            origins = inspect_configuration(plan.repo_id)
+        manual = prepare_manual_edit(plan)
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Manual DNF5 configuration — no automatic changes")
+        dialog.resize(820, 620)
+        layout = QVBoxLayout(dialog)
+        intro = QLabel(
+            f"Repository: {plan.repo_id} | Source file: {manual.file_path}\\n"
+            "Review Configuration origins first: another DNF5 override may take precedence."
+        )
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+        instructions = QTextEdit(dialog)
+        instructions.setReadOnly(True)
+        instructions.setPlainText(manual.instructions)
+        layout.addWidget(instructions, 2)
+        layout.addWidget(QLabel("Section-scoped example (do not replace the whole file):"))
+        snippet = QTextEdit(dialog)
+        snippet.setReadOnly(True)
+        snippet.setPlainText(manual.snippet)
+        snippet.setMaximumHeight(140)
+        layout.addWidget(snippet)
+        buttons = QHBoxLayout()
+        copy_button = QPushButton("Copy setting lines")
+        copy_button.clicked.connect(
+            lambda: QApplication.clipboard().setText(
+                "\\n".join(manual.snippet.splitlines()[1:]) + "\\n"
+            )
+        )
+        buttons.addWidget(copy_button)
+        verify_button = QPushButton("Verify effective settings")
+        def verify():
             try:
                 effective = read_effective_config(plan.repo_id)
-            except (RuntimeError, ValueError):
-                effective = None
-            preflight = assess_write_preflight(plan, origins, effective)
-            preflight_text = format_write_preflight(preflight)
-        except (OSError, ValueError) as exc:
-            preflight_text = f"WRITE BLOCKED — preflight unavailable: {exc}"
-        try:
-            approved = validate_request(plan.repo_id, entry.speed.url)
-            options = preview_options(approved)
-            policy_text = ("Future helper request: VALIDATED (preview only)\n"
-                           + "\n".join(options))
-        except ValueError as exc:
-            policy_text = "Future helper request: BLOCKED — " + str(exc)
-        dialog = QMessageBox(self)
-        dialog.setIcon(QMessageBox.Icon.Information)
-        dialog.setWindowTitle("Proposed DNF configuration — preview only")
-        dialog.setText(format_change_plan(plan) + "\n\n" + preflight_text + "\n\n" + policy_text)
-        test_button = dialog.addButton("Test authorization", QMessageBox.ButtonRole.ActionRole)
-        dialog.addButton(QMessageBox.StandardButton.Close)
+                ok, message = verify_effective_values(plan, effective.values)
+            except (RuntimeError, ValueError, OSError) as exc:
+                ok, message = False, f"Could not read DNF5 effective settings: {exc}"
+            if ok:
+                QMessageBox.information(dialog, "DNF5 verification", message)
+            else:
+                QMessageBox.warning(dialog, "DNF5 verification", message)
+        verify_button.clicked.connect(verify)
+        buttons.addWidget(verify_button)
+        close_button = QPushButton("Close")
+        close_button.clicked.connect(dialog.accept)
+        buttons.addWidget(close_button)
+        layout.addLayout(buttons)
         dialog.exec()
-        if dialog.clickedButton() is test_button:
-            self.test_authorization()
-
-    def test_authorization(self):
-        """Run the separately installed read-only helper, never the GUI, via pkexec."""
-        if self.auth_process is not None:
-            QMessageBox.information(self, "Authorization test", "An authorization test is already running.")
-            return
-        process = QProcess(self)
-        self.auth_process = process
-        process.setProgram("/usr/bin/pkexec")
-        process.setArguments(["/usr/libexec/mirrorpilot-auth-probe"])
-        process.setProcessChannelMode(QProcess.ProcessChannelMode.SeparateChannels)
-        process.finished.connect(self.authorization_finished)
-        process.errorOccurred.connect(self.authorization_error)
-        self.statusBar().showMessage("Waiting for Polkit authorization…")
-        process.start()
-
-    def authorization_error(self, error):
-        if self.auth_process is None:
-            return
-        if error == QProcess.ProcessError.FailedToStart:
-            self.finish_authorization("Could not start pkexec. Is polkit installed?", success=False)
-
-    def authorization_finished(self, exit_code, exit_status):
-        process = self.auth_process
-        if process is None:
-            return
-        output = bytes(process.readAllStandardOutput()).decode("utf-8", errors="replace")
-        error = bytes(process.readAllStandardError()).decode("utf-8", errors="replace")
-        if exit_status != QProcess.ExitStatus.NormalExit or exit_code != 0:
-            detail = error.strip()[:500] or "Authorization canceled or denied."
-            self.finish_authorization(f"Authorization was not completed (exit {exit_code}).\n{detail}", success=False)
-            return
-        try:
-            response = parse_probe_response(output.strip())
-        except ValueError as exc:
-            self.finish_authorization(f"Helper returned an invalid response: {exc}", success=False)
-            return
-        self.finish_authorization(
-            f"Authorization succeeded. Helper effective UID: {response['effective_uid']}.\n"
-            "The probe performed no repository writes.", success=True)
-
-    def finish_authorization(self, message, *, success):
-        process = self.auth_process
-        self.auth_process = None
-        if process is not None:
-            process.deleteLater()
-        self.statusBar().showMessage("Authorization test complete" if success else "Authorization test failed")
-        if success:
-            QMessageBox.information(self, "Polkit authorization test", message)
-        else:
-            QMessageBox.warning(self, "Polkit authorization test", message)
 
     def verify_selected(self):
         row = self.mirrors.currentRow()
