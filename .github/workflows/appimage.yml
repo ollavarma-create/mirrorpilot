@@ -20,7 +20,7 @@ permissions:
 jobs:
   appimage:
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v7
@@ -30,27 +30,19 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y librsvg2-bin appstream
+          sudo apt-get install -y librsvg2-bin appstream patchelf ccache
           python -m pip install --upgrade pip
-          python -m pip install '.[test]' 'pyinstaller>=6.0,<7'
+          python -m pip install '.[test]' 'nuitka>=2.7,<3'
       - name: Report packaging toolchain versions
         run: |
           python --version
-          python -m pip show PySide6 pyinstaller
+          python -m pip show PySide6 nuitka
       - name: Run unit tests
         run: python -m pytest -q
       - name: Validate AppStream metadata
         run: appstreamcli validate packaging/mirrorpilot.appdata.xml
       - name: Build AppImage
         run: bash packaging/build-appimage.sh
-      - name: Diagnose bundled fontconfig libraries
-        run: |
-          echo "Host fontconfig:"
-          fc-match sans-serif || true
-          echo "Bundled font-related shared libraries:"
-          find dist/MirrorPilot.AppDir/usr/bin -type f | grep -E '/lib(fontconfig|freetype|expat)\.so' || true
-          echo "System fontconfig:"
-          dpkg-query -W fontconfig libfontconfig1 || true
       - name: Validate AppDir layout
         run: |
           test -x dist/MirrorPilot.AppDir/AppRun
