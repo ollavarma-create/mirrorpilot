@@ -40,7 +40,7 @@ def test_pipeline_only_streams_fastest_matching_mirror(monkeypatch):
 
 def test_bad_index_never_gets_recommended(monkeypatch):
     monkeypatch.setattr(d, "benchmark", lambda release, repo, progress: [speed("https://bad/", 300)])
-    monkeypatch.setattr(d, "audit", lambda *args: check("different"))
+    monkeypatch.setattr(d, "audit", lambda *args, **kwargs: check("different"))
     monkeypatch.setattr(d, "audit_referenced", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("must not fetch")))
     rows = d.run_diagnostics("45")
     assert rows[0].health == "problem"
