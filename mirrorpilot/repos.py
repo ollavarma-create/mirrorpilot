@@ -62,13 +62,13 @@ def parse_repo_info(output: str) -> list[Repo]:
 
 
 def get_repositories(releasever: str | None = None) -> list[Repo]:
-    """Run a DNF5 read-only query, optionally for a target release."""
+    """Read cached DNF5 repository configuration without network refresh."""
     cmd = ["dnf5"]
     if releasever:
         if not re.fullmatch(r"[a-zA-Z0-9_.-]{1,32}", releasever):
             raise ValueError("Invalid release version")
         cmd.append(f"--releasever={releasever}")
-    cmd += ["repo", "info", "--all"]
+    cmd += ["--cacheonly", "repo", "info", "--all"]
     try:
         proc = subprocess.run(
             cmd, capture_output=True, text=True, timeout=35,
