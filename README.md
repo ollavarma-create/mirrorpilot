@@ -4,7 +4,7 @@
 
 MirrorPilot helps you investigate slow or broken Fedora repository mirrors, compare alternatives, and review a DNF5 configuration command **before deciding whether to run it yourself**. It does not install packages, change repositories, modify DNF caches, or request administrator privileges.
 
-> **Status:** experimental pre-alpha (`0.1.0a1`). Tested on Fedora 44 KDE; other releases and environments need further validation. The project is not affiliated with the Fedora Project.
+> **Status:** experimental alpha (`0.1.0a1`). The AppImage has been locally tested on Fedora KDE 45 (Wayland); diagnostic development and field tests also took place on Fedora 44. Other releases and environments need further validation. The project is not affiliated with the Fedora Project.
 
 ![MirrorPilot main window showing Fedora repositories, tested mirrors, and diagnostics](docs/images/mirrorpilot-main.png)
 
@@ -27,9 +27,27 @@ In a Fedora 44 field test, a configured updates mirror returned HTTP 404 for ref
 
 The **Installed** Fedora version comes from the system; **Diagnose release** selects which release to inspect. Testing another release is allowed, but generating a configuration change for a release other than the installed one is blocked.
 
+## Download the alpha AppImage
+
+**[Download MirrorPilot v0.1.0a1 for Fedora 45 (x86_64)](https://github.com/ollavarma-create/mirrorpilot/releases/download/v0.1.0a1/MirrorPilot-0.1.0a1-Fedora45-x86_64.AppImage)** · [Release notes and SHA256 checksum](https://github.com/ollavarma-create/mirrorpilot/releases/tag/v0.1.0a1)
+
+This is an **experimental, locally built AppImage**, tested on Fedora KDE 45 with Wayland. Compatibility with older Fedora releases is **not yet verified**. MirrorPilot requires a Linux system with **DNF5**; Ubuntu and other systems without DNF5 are not supported. The AppImage is not a general-purpose Linux mirror manager.
+
+Download the AppImage and the accompanying `SHA256SUMS` file from the same release, then in the download directory run:
+
+```bash
+sha256sum -c SHA256SUMS
+chmod +x MirrorPilot-0.1.0a1-Fedora45-x86_64.AppImage
+./MirrorPilot-0.1.0a1-Fedora45-x86_64.AppImage
+```
+
+The checksum check should print `OK`. No administrator privileges are needed to launch MirrorPilot. **Automated AppImage packaging is still under development**; this release uses the locally tested build, not the experimental CI artifact.
+
+**Beta testers wanted:** If you try it on Fedora 43, 44, 45, or another DNF5-based distribution, please [open an issue](https://github.com/ollavarma-create/mirrorpilot/issues) with your Fedora version, desktop/session (Wayland or X11), whether the AppImage launches, and any non-sensitive error output. Reports of successful runs are useful too. Never paste credentials, private repository URLs, or other sensitive configuration data.
+
 ## Install and run
 
-Requires Linux with DNF5, Python 3.11+, and Qt/PySide6. The primary development and field-test environment is Fedora KDE.
+For **source installation**, requires Linux with DNF5, Python 3.11+, and Qt/PySide6. The primary development and field-test environment is Fedora KDE. The AppImage download above does not require a separate Python or PySide6 installation.
 
 From a clone of this repository:
 
