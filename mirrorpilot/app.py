@@ -164,6 +164,31 @@ class MainWindow(QMainWindow):
         self.load_repos()
         self.run_job(available_targets, (), self.releases_loaded)
 
+    def closeEvent(self, event):
+        # A completed Worker signal does not imply its QThread has stopped.
+        # Let Qt process thread.finished and deferred deletions before exit.
+        active = [thread for thread in self.threads if thread.isRunning()]
+        if active:
+            event.ignore()
+            self.statusBar().showMessage(
+                "Waiting for background jobs to finish before closing…"
+            )
+            self._close_pending = True
+            return
+        self.timer.stop()
+        event.accept()
+
+    def _thread_finished(self, thread, worker):
+        if worker in self.workers:
+            self.workers.remove(worker)
+        if thread in self.threads:
+            self.threads.remove(thread)
+        if getattr(self, "_close_pending", False) and not any(
+            t.isRunning() for t in self.threads
+        ):
+            self._close_pending = False
+            QTimer.singleShot(0, self.close)
+
     def releases_loaded(self, targets, error):
         if error or not targets:
             return
@@ -189,8 +214,7 @@ class MainWindow(QMainWindow):
         worker.finished.connect(thread.quit)
         worker.finished.connect(worker.deleteLater)
         thread.finished.connect(thread.deleteLater)
-        thread.finished.connect(lambda w=worker: self.workers.remove(w) if w in self.workers else None)
-        thread.finished.connect(lambda t=thread: self.threads.remove(t) if t in self.threads else None)
+        thread.finished.connect(lambda t=thread, w=worker: self._thread_finished(t, w))
         thread.start()
 
     def load_repos(self):
