@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>mirrorpilot.desktop</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+  <name>MirrorPilot</name>
+  <summary>Inspect Fedora DNF5 repository mirrors</summary>
+  <description>
+    <p>MirrorPilot helps Fedora users inspect configured DNF5 repositories, compare mirrors, and check repository metadata without changing system configuration automatically.</p>
+  </description>
+  <launchable type="desktop-id">mirrorpilot.desktop</launchable>
+  <url type="homepage">https://github.com/ollavarma-create/mirrorpilot</url>
+  <provides>
+    <binary>mirrorpilot</binary>
+  </provides>
+</component>
