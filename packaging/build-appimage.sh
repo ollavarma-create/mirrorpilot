@@ -11,8 +11,8 @@ mkdir -p dist
 # Nuitka standalone build with explicit PySide6 plugin.
 python -m nuitka --standalone --assume-yes-for-downloads \
   --enable-plugin=pyside6 --include-package=mirrorpilot \
-  --output-dir="$ROOT/dist" --output-filename=mirrorpilot \
-  mirrorpilot/__main__.py
+  --python-flag=-m --output-dir="$ROOT/dist" --output-filename=mirrorpilot \
+  mirrorpilot
 APPDIR="$ROOT/dist/MirrorPilot.AppDir"
 rm -rf "$APPDIR"
 mkdir -p "$APPDIR/usr/bin" "$APPDIR/usr/share/icons/hicolor/scalable/apps" "$APPDIR/usr/share/applications"
