@@ -146,7 +146,7 @@ def _hash_stream(url: str, algorithm: str, expected_size: int | None, progress=N
 
 def audit_referenced(base: str, country: str, release: str, progress=None) -> AuditResult:
     """Verify three metadata kinds with streaming, without changing DNF."""
-    if country not in COUNTRIES or not release.isdigit() or len(release) > 3:
+    if country not in (*COUNTRIES, "Configured") or not release.isdigit() or len(release) > 3:
         return AuditResult("unsupported", "Invalid country or release", base)
     if _base_from_metalink(base + "repodata/repomd.xml") != base:
         return AuditResult("unsupported", "HTTPS mirror base URL required", base)
