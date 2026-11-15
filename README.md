@@ -126,3 +126,30 @@ Run `python -m pytest -q tests/test_sandbox_transaction.py` to check rollback sc
 `mirrorpilot/durable_sandbox.py` adds a **test-only** persistent before-image journal with states `PREPARED`, `APPLIED`, and `VERIFIED`. Before replacing the sandbox target, the journal is atomically persisted and fsynced. A new process can call `recover()` to restore the original file (or its previous absence) if the journal remains unfinished. A verified transaction remains in place until explicit journal cleanup. The module intentionally models crashes between target replacement and journal advancement.
 
 Run `python -m pytest -v tests/test_durable_sandbox.py`. All tests operate under pytest temporary directories. This is **not a production crash-safe root writer**: there is no process lock, no protection from adversarial filesystem races, no root-owned backup store, no SELinux/ACL/ownership restoration, and no DNF5 post-write verification. In particular, it is not wired into the GUI or Polkit and must not be used to edit real repositories.
+
+### Optional Polkit authorization smoke test (Fedora KDE)
+
+This stage tests **authentication only**. It does not modify DNF, repository files or system configuration beyond explicitly installing the test helper and its Polkit policy. The GUI remains unprivileged; there is **no Apply button** yet.
+
+After reviewing the two files under `packaging/polkit/`, install them using these commands from the repository root:
+
+```bash
+sudo install -o root -g root -m 0755 packaging/polkit/mirrorpilot-auth-probe /usr/libexec/mirrorpilot-auth-probe
+sudo install -o root -g root -m 0644 packaging/polkit/org.mirrorpilot.auth-probe.policy /usr/share/polkit-1/actions/org.mirrorpilot.auth-probe.policy
+```
+
+Run `pkexec /usr/libexec/mirrorpilot-auth-probe` as the **normal desktop user**, without sudo. KDE should request administrator authentication. After successful authentication the helper prints:
+
+```json
+{"protocol": "mirrorpilot-auth-probe-v1", "authorized": true, "effective_uid": 0, "writes": false}
+```
+
+The exact JSON whitespace is unimportant. Canceling the dialog should fail without printing a success response. The test helper accepts no command-line arguments and performs no writes.
+
+To uninstall **only this probe**:
+
+```bash
+sudo rm -f /usr/libexec/mirrorpilot-auth-probe /usr/share/polkit-1/actions/org.mirrorpilot.auth-probe.policy
+```
+
+Run `python -m pytest -q tests/test_polkit_probe.py` for parser tests. This is an optional local integration test, not an automatic installation. Do not invoke the entire MirrorPilot GUI through `pkexec` or `sudo`. The eventual production helper will be separate and require independent authorization and input validation.
