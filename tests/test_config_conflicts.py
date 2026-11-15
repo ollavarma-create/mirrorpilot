@@ -55,3 +55,23 @@ def test_other_repo_is_not_misattributed(tmp_path):
     (overrides / "other.repo").write_text("[updates]\nbaseurl=https://other.org/\n")
     report = inspect_configuration("fedora", base, overrides)
     assert "other.org" not in format_config_report(report)
+
+
+def test_default_origins_include_fedora45_packaged_repos(tmp_path, monkeypatch):
+    from mirrorpilot import repos
+    from mirrorpilot.config_conflicts import inspect_configuration
+    system_dir = tmp_path / "system"
+    local_dir = tmp_path / "local"
+    overrides = tmp_path / "overrides"
+    for directory in (system_dir, local_dir, overrides):
+        directory.mkdir()
+    (system_dir / "fedora.repo").write_text("[fedora]\nmetalink=https://example.org/list\n")
+    (overrides / "custom.repo").write_text("[fedora]\nmetalink=\n")
+    monkeypatch.setattr(repos, "SYSTEM_REPO_DIR", system_dir)
+    monkeypatch.setattr(repos, "_DEFAULT_REPO_DIR", local_dir)
+    monkeypatch.setattr(repos, "REPO_DIR", local_dir)
+    monkeypatch.setattr(repos, "OVERRIDE_DIR", overrides)
+    report = inspect_configuration("fedora")
+    metalink = next(item for item in report.findings if item.key == "metalink")
+    assert len(metalink.occurrences) == 2
+    assert metalink.occurrences[0].path == str(system_dir / "fedora.repo")
