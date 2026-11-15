@@ -20,7 +20,7 @@ def _run(root: Path, label: str, *, override_a: str | None = None,
     repo_dir.mkdir(parents=True, exist_ok=True)
     override_dir.mkdir(parents=True, exist_ok=True)
     config.parent.mkdir(parents=True, exist_ok=True)
-    config.write_text("[main]\nreposdir=/etc/yum.repos.d\n", encoding="utf-8")
+    config.write_text("[main]\nreposdir=/etc/yum.repos.d\nfastestmirror=0\nip_resolve=whatever\n", encoding="utf-8")
     (repo_dir / "test.repo").write_text(
         "[mirrorpilot-precedence-test]\n"
         "name=MirrorPilot isolated precedence test\n"
@@ -44,7 +44,7 @@ def _run(root: Path, label: str, *, override_a: str | None = None,
             )
     args = [
         "dnf5", f"--installroot={root}", "--config=/etc/dnf/dnf.conf",
-        "--releasever=44", "--setopt=reposdir=/etc/yum.repos.d",
+        "--releasever=44", f"--setopt=reposdir={repo_dir}",
         "--dump-repo-config=mirrorpilot-precedence-test",
     ]
     env = os.environ.copy()
@@ -61,35 +61,13 @@ def _run(root: Path, label: str, *, override_a: str | None = None,
         print(f"INCONCLUSIVE: DNF5 exit code={result.returncode}; test repository found={found}")
         print("stdout:", repr(result.stdout[:1500]))
         print("stderr:", repr(result.stderr[:1500]))
-    if result.returncode or not found:
-        print("Diagnosing isolated configuration path resolution:")
-        variants = (
-            ("installroot with absolute config", [
-                "dnf5", f"--installroot={root}", f"--config={config}",
-                "--releasever=44", f"--setopt=reposdir={repo_dir}",
-                "--dump-repo-config=mirrorpilot-precedence-test",
-            ]),
-            ("installroot with root-relative config and absolute reposdir", [
-                "dnf5", f"--installroot={root}", "--config=/etc/dnf/dnf.conf",
-                "--releasever=44", f"--setopt=reposdir={repo_dir}",
-                "--dump-repo-config=mirrorpilot-precedence-test",
-            ]),
-            ("explicit temporary config without installroot", [
-                "dnf5", f"--config={config}", "--releasever=44",
-                f"--setopt=reposdir={repo_dir}",
-                "--dump-repo-config=mirrorpilot-precedence-test",
-            ]),
-        )
-        for variant, command in variants:
-            probe = subprocess.run(command, cwd=root, env=env, capture_output=True,
-                                   text=True, timeout=15, check=False)
-            print(f"  {variant}: exit={probe.returncode}, "
-                  f"found={header in probe.stdout}")
-            print(f"    stdout: {probe.stdout[:500]!r}")
-            print(f"    stderr: {probe.stderr[:500]!r}")
     for line in result.stdout.splitlines():
         if line.startswith(("baseurl =", "metalink =", "mirrorlist =", "enabled =")):
             print(line)
+    if found and ("fastestmirror = 0" not in result.stdout or
+                  "ip_resolve = whatever" not in result.stdout):
+        print("INCONCLUSIVE: DNF5 did not load the isolated main config markers.")
+        return 3, result.stdout, result.stderr
     return (result.returncode if result.returncode else (0 if found else 2)), result.stdout, result.stderr
 
 
@@ -103,16 +81,35 @@ def main() -> int:
             ("90 then 99", "https://ninety.example.org/fedora/44/",
              "https://ninetynine.example.org/fedora/44/"),
         )
+        outputs = []
         for label, a, b in cases:
             try:
                 code, stdout, stderr = _run(root, label, override_a=a, override_b=b)
                 if code:
-                    print("Stopping: cannot establish that DNF5 loaded the isolated repository.")
+                    print("Stopping: cannot establish that DNF5 loaded the isolated configuration.")
                     return code
+                outputs.append((label, stdout))
             except (OSError, subprocess.TimeoutExpired) as exc:
                 print(f"{label}: experiment failed: {exc}")
                 return 1
-    print("\nAll test repositories were found. Experiment remains observational; no system configuration was changed.")
+        base = "baseurl = https://base.example.org/fedora/44/"
+        ninety = "baseurl = https://ninety.example.org/fedora/44/"
+        ninety_nine = "baseurl = https://ninetynine.example.org/fedora/44/"
+        if base not in outputs[0][1]:
+            print("INCONCLUSIVE: base repository differs from fixture.")
+            return 4
+        if ninety not in outputs[1][1] or ninety_nine not in outputs[2][1]:
+            print("INCONCLUSIVE: isolated DNF5 did not apply the override fragments.")
+            print("This does not establish production precedence.")
+            return 5
+        if ninety_nine in outputs[3][1]:
+            print("OBSERVED: 99-config_manager.repo wins over 90-mirrorpilot.repo in this fixture.")
+        elif ninety in outputs[3][1]:
+            print("OBSERVED: 90-mirrorpilot.repo wins over 99-config_manager.repo in this fixture.")
+        else:
+            print("INCONCLUSIVE: neither expected override wins in the combined case.")
+            return 6
+    print("\nIsolated fixture completed; this alone does not authorize system writes.")
     return 0
 
 
