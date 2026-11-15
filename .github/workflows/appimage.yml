@@ -2,6 +2,14 @@ name: AppImage (experimental)
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/appimage.yml'
+      - 'packaging/**'
+      - 'assets/**'
+      - 'mirrorpilot/**'
+      - 'tests/**'
+      - 'pyproject.toml'
   push:
     tags:
       - 'v*'
@@ -27,6 +35,12 @@ jobs:
         run: python -m pytest -q
       - name: Build AppImage
         run: bash packaging/build-appimage.sh
+      - name: Validate AppDir layout
+        run: |
+          test -x dist/MirrorPilot.AppDir/AppRun
+          test -x dist/MirrorPilot.AppDir/usr/bin/mirrorpilot
+          test -f dist/MirrorPilot.AppDir/mirrorpilot.desktop
+          test -f dist/MirrorPilot.AppDir/mirrorpilot.svg
       - name: Check artifact and checksum
         run: |
           test -s dist/SHA256SUMS
