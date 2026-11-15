@@ -76,3 +76,29 @@ def test_no_unapproved_probes(monkeypatch):
     monkeypatch.setattr(speed, "discover", lambda *args: [])
     monkeypatch.setattr(speed, "probe", lambda *args: pytest.fail("unexpected probe"))
     assert speed.benchmark("45") == []
+
+def test_round_robin_countries(monkeypatch):
+    urls = [f"https://de{i}.example/repo/repodata/repomd.xml" for i in range(9)]
+    urls += ["https://fi.example/repo/repodata/repomd.xml",
+             "https://ee.example/repo/repodata/repomd.xml"]
+    def fake(url, limit):
+        if "metalink?" in url:
+            return _xml(*urls)
+        return _registry(*([("DE", f"de{i}.example") for i in range(9)] +
+                           [("FI", "fi.example"), ("EE", "ee.example")]))
+    monkeypatch.setattr(speed, "_download", fake)
+    result = speed.discover("45")
+    assert len(result) == 8
+    assert [country for _, country in result[:3]] == ["FI", "EE", "DE"]
+    assert ("https://fi.example/repo/", "FI") in result
+
+def test_range_is_recorded(monkeypatch):
+    index = (b'<repomd xmlns="http://linux.duke.edu/metadata/repo">'
+             b'<data type="primary"><location href="repodata/primary.xml.zck"/></data>'
+             b'</repomd>')
+    monkeypatch.setattr(speed, "_download", lambda url, limit: index)
+    values = iter([(10, 20, 100), (20, 200, 100), (30, 50, 100)])
+    monkeypatch.setattr(speed, "_transfer", lambda url: next(values))
+    result = speed.probe("https://example.org/repo/", "EE")
+    assert result.min_mbps == 20
+    assert result.max_mbps == 200
