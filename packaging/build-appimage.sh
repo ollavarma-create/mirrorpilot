@@ -8,27 +8,15 @@ if [[ "$(uname -m)" != "x86_64" ]]; then
 fi
 VERSION="$(python -c 'import importlib.metadata; print(importlib.metadata.version("mirrorpilot"))')"
 mkdir -p dist
-python -m PyInstaller --noconfirm --clean --onedir \
-  --name mirrorpilot --collect-all PySide6 --hidden-import mirrorpilot.tls_diagnostics \
+# Nuitka standalone build with explicit PySide6 plugin.
+python -m nuitka --standalone --assume-yes-for-downloads \
+  --enable-plugin=pyside6 --include-package=mirrorpilot \
+  --output-dir="$ROOT/dist" --output-filename=mirrorpilot \
   mirrorpilot/__main__.py
 APPDIR="$ROOT/dist/MirrorPilot.AppDir"
+rm -rf "$APPDIR"
 mkdir -p "$APPDIR/usr/bin" "$APPDIR/usr/share/icons/hicolor/scalable/apps" "$APPDIR/usr/share/applications"
-cp -a "$ROOT/dist/mirrorpilot/." "$APPDIR/usr/bin/"
-# Minimal self-contained fontconfig configuration: use host fonts, not host rules.
-# Avoid newer host XML rules that the bundled fontconfig cannot parse.
-mkdir -p "$APPDIR/usr/etc/fonts"
-cat > "$APPDIR/usr/etc/fonts/fonts.conf" <<'FONTCONFIG_EOF'
-<?xml version="1.0"?>
-<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
-<fontconfig>
-  <dir>/usr/share/fonts</dir>
-  <dir>/usr/local/share/fonts</dir>
-  <dir prefix="xdg">fonts</dir>
-  <dir>~/.fonts</dir>
-  <cachedir prefix="xdg">fontconfig</cachedir>
-  <cachedir>~/.cache/fontconfig</cachedir>
-</fontconfig>
-FONTCONFIG_EOF
+cp -a "$ROOT/dist/__main__.dist/." "$APPDIR/usr/bin/"
 cp "$ROOT/packaging/io.github.ollavarma_create.MirrorPilot.desktop" "$APPDIR/io.github.ollavarma_create.MirrorPilot.desktop"
 cp "$ROOT/packaging/io.github.ollavarma_create.MirrorPilot.desktop" "$APPDIR/usr/share/applications/io.github.ollavarma_create.MirrorPilot.desktop"
 mkdir -p "$APPDIR/usr/share/metainfo" "$APPDIR/usr/share/applications"
@@ -58,14 +46,6 @@ if [ "${SSL_CERT_FILE+x}" != x ]; then
       break
     fi
   done
-fi
-# The bundled fontconfig may not understand newer host distribution rules.
-# Use matching packaged rules, while retaining host font directories.
-if [ "${FONTCONFIG_FILE+x}" != x ]; then
-  export FONTCONFIG_FILE="$HERE/usr/etc/fonts/fonts.conf"
-fi
-if [ "${FONTCONFIG_PATH+x}" != x ]; then
-  export FONTCONFIG_PATH="$HERE/usr/etc/fonts"
 fi
 exec "$HERE/usr/bin/mirrorpilot" "$@"
 EOF
