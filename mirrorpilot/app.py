@@ -316,20 +316,26 @@ class MainWindow(QMainWindow):
                 if row is winner:
                     item.setForeground(QBrush(QColor("#166534")))
                 self.mirrors.setItem(i, j, item)
-        current = next((r for r in self.results if r.speed.country == "Configured"), None)
         self.statusBar().showMessage("Diagnostics complete")
-        if current is not None and current.health in ("problem", "error", "uncertain"):
-            self.mirrors.selectRow(self.results.index(current))
+        if self.current_only and len(self.results) == 1:
+            # One current-source result is informational, not a comparison.
+            # Keep the health background visible instead of Qt selection blue.
+            self.mirrors.clearSelection()
+            self.mirrors.setCurrentItem(None)
+            self.verify_button.setEnabled(False)
+            self.show_details(self.results[0])
         else:
             self.selected_mirror()
 
     def selected_mirror(self):
         row = self.mirrors.currentRow()
-        valid = 0 <= row < len(self.results)
+        valid = 0 <= row < len(self.results) and bool(self.mirrors.selectedItems())
         self.verify_button.setEnabled(valid and not self.running)
         if not valid:
             return
-        entry = self.results[row]
+        self.show_details(self.results[row])
+
+    def show_details(self, entry):
         lines = [entry.speed.url, f"Speed: {entry.speed.status} — {entry.speed.detail}",
                  f"Index: {entry.index.status}: {entry.index.message}" if entry.index else "Index: not checked",
                  f"Metadata: {entry.metadata.status}: {entry.metadata.message}" if entry.metadata else
