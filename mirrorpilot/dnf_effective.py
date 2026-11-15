@@ -63,22 +63,46 @@ def read_effective_config(repo_id: str, *, timeout: float = 8) -> EffectiveConfi
 
 
 def format_effective_comparison(report, effective: EffectiveConfig) -> str:
-    lines = ["DNF5 effective configuration (authoritative values)", ""]
+    """One consolidated explanation; never infer precedence from file order."""
+    lines = [
+        f"Configuration explained — [{report.repo_id}]",
+        "",
+        "DNF5 effective values (read-only)",
+        "These are the settings DNF5 actually resolves, not a network health check.",
+        "",
+    ]
     for key in IMPORTANT:
-        value = effective.values.get(key)
-        if value is not None:
-            lines.append(f"{key} = {value!r}")
-    lines.extend(["", "File-level origins compared with DNF5:", ""])
-    for finding in report.findings:
-        if not finding.occurrences:
+        if key not in effective.values:
             continue
-        actual = effective.values.get(finding.key)
-        lines.append(f"{finding.key}: effective = {actual!r}")
+        actual = effective.values[key]
+        lines.append(f"{key} = {actual!r}")
+        finding = next((f for f in report.findings if f.key == key), None)
+        if finding is None or not finding.occurrences:
+            lines.append("  No explicit definition found in inspected repository files.")
+            lines.append("")
+            continue
         for origin in finding.occurrences:
             lines.append(f"  {origin.layer}: {origin.path}")
-            lines.append(f"    declared = {origin.value!r}")
-        if actual is not None and len(finding.occurrences) > 1:
-            lines.append("  Note: differences can be intentional overrides; DNF5 is the authority.")
+            lines.append(f"    declared: {origin.value!r}")
+        if len(finding.occurrences) > 1:
+            lines.append("  Multiple definitions found; DNF5 effective value is authoritative.")
+        elif "$" in finding.occurrences[0].value:
+            lines.append("  DNF5 may expand variables in the effective value.")
         lines.append("")
-    lines.append("Effective values do not identify which individual file won precedence.")
+    lines.extend([
+        "Interpretation:",
+        "  DNF5 values are confirmed for this invocation.",
+        "  Source-file precedence cannot be proven solely from these values.",
+        "  A deliberately empty metalink may disable the default source.",
+        "  Configuration validity does not establish mirror availability.",
+        "  No changes or automatic repair are performed.",
+    ])
+    # Preserve meaningful file-inspection warnings, but not stale disclaimers
+    # saying effective DNF5 values were never checked.
+    for warning in report.warnings:
+        if warning.startswith("This view shows file-level evidence"):
+            continue
+        if warning.startswith("Multiple source mechanisms are configured."):
+            continue
+        lines.append(f"  File inspection: {warning}")
     return "\n".join(lines)
