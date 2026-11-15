@@ -49,7 +49,7 @@ def validate_request(repository: str, baseurl: str) -> MirrorChangeRequest:
         raise ValueError("IP literals are not accepted")
     if not host.endswith((".fi", ".se", ".ee", ".de", ".nl", ".dk")):
         raise ValueError("Mirror hostname outside approved country domains")
-    if not parts.path.startswith("/") or not parts.path.endswith("/"):
+    if parts.path == "/" or not parts.path.startswith("/") or not parts.path.endswith("/"):
         raise ValueError("Mirror URL must contain a slash-terminated path")
     if any(x in parts.path for x in ("..", "%", "\\", ";", "=")):
         raise ValueError("Unsafe URL path")
