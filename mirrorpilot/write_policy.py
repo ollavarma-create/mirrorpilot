@@ -56,8 +56,9 @@ def validate_request(repository: str, baseurl: str) -> MirrorChangeRequest:
     return MirrorChangeRequest(repository, baseurl)
 
 
-def preview_options(request: MirrorChangeRequest) -> tuple[str, str]:
+def preview_options(request: MirrorChangeRequest) -> tuple[str, str, str]:
     """Show exact intended DNF5 option arguments; never execute them here."""
     request = validate_request(request.repository, request.baseurl)
     return (f"{request.repository}.baseurl={request.baseurl}",
-            f"{request.repository}.metalink=")
+            f"{request.repository}.metalink=",
+            f"{request.repository}.mirrorlist=")
