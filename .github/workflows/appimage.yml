@@ -48,7 +48,7 @@ jobs:
           echo "Host fontconfig:"
           fc-match sans-serif || true
           echo "Bundled font-related shared libraries:"
-          find dist/MirrorPilot.AppDir/usr/bin -type f \\( -name 'libfontconfig.so*' -o -name 'libfreetype.so*' -o -name 'libexpat.so*' \\) -print
+          find dist/MirrorPilot.AppDir/usr/bin -type f | grep -E '/lib(fontconfig|freetype|expat)\.so' || true
           echo "System fontconfig:"
           dpkg-query -W fontconfig libfontconfig1 || true
       - name: Validate AppDir layout
