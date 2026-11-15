@@ -1,4 +1,4 @@
-"""Read-only, conservative instructions for user-managed DNF5 repo edits."""
+"""Read-only guidance for user-run DNF5 config-manager commands."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -45,8 +45,10 @@ def verify_effective_values(plan: ChangePlan, values: dict[str, str]) -> tuple[b
     if base == plan.proposed_url and not metalink and not mirrorlist:
         return True, "DNF5 effective baseurl matches the recommendation; metalink and mirrorlist are empty."
     return False, (
-        f"DNF5 effective values do not match.\n"
-        f"baseurl: {base or '(empty)'}\n"
-        f"metalink: {metalink or '(empty)'}\n"
-        f"mirrorlist: {mirrorlist or '(empty)'}"
+        "Current configuration differs from recommendation.\n"
+        f"Current mirror: {base or '(empty)'}\n"
+        f"Recommended mirror: {plan.proposed_url}\n"
+        f"Current metalink: {metalink or '(empty)'}\n"
+        f"Current mirrorlist: {mirrorlist or '(empty)'}\n\n"
+        "No changes have been made by MirrorPilot."
     )
