@@ -24,6 +24,7 @@ def test_offline_repo_and_override(tmp_path, monkeypatch):
     assert result[0].name == "Fedora 45"
     assert result[1].source == f"https://mirror.example.org/45/{repos.ARCH}/"
     assert result[1].metalink == ""
+    assert result[1].raw_baseurl == "https://mirror.example.org/$releasever/$basearch/"
 
 
 def test_reject_unsafe_version():

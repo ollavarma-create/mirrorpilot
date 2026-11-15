@@ -1,8 +1,7 @@
 """Read-only change planning for user-managed DNF5 configuration.
 
 This module never writes to system paths. Preview targets are *not* an
-authorization to write: a future privileged helper must independently
-revalidate all inputs and policy.
+authorization to write: MirrorPilot never writes DNF configuration.
 """
 from __future__ import annotations
 
@@ -58,6 +57,30 @@ def validate_mirror_url(url: str) -> str:
     return url
 
 
+def persistent_mirror_url(repo_id: str, concrete_url: str, release: str) -> str:
+    """Template only the known Fedora repo layout; refuse unknown layouts.
+
+    Diagnostic URLs remain concrete. The returned DNF URL uses release and
+    architecture variables, but availability for a future release is not proven.
+    """
+    validated = validate_mirror_url(concrete_url)
+    if not re.fullmatch(r"[0-9]{1,3}", release):
+        raise ValueError("Unknown Fedora release")
+    arch = r"[A-Za-z0-9_]+"
+    if repo_id == "updates":
+        suffix = re.compile(rf"/updates/{re.escape(release)}/Everything/({arch})/$")
+        replacement = "/updates/$releasever/Everything/$basearch/"
+    elif repo_id == "fedora":
+        suffix = re.compile(rf"/releases/{re.escape(release)}/Everything/({arch})/os/$")
+        replacement = "/releases/$releasever/Everything/$basearch/os/"
+    else:
+        raise ValueError("Unsupported Fedora repository")
+    path = urlsplit(validated).path
+    if not suffix.search(path):
+        raise ValueError("Mirror URL does not match the expected Fedora repository layout; refusing a release-locked persistent setting")
+    return validated[: -len(path)] + suffix.sub(lambda _: replacement, path)
+
+
 def release_change_allowed(installed_release: str, target_release: str) -> bool:
     """Fail closed unless both releases are known, numeric and identical."""
     return (
@@ -83,13 +106,14 @@ def build_change_plan(repo_id: str, current_url: str, proposed_url: str,
     if not _REPO_ID.fullmatch(repo_id) or repo_id not in ALLOWED_REPOS:
         raise ValueError("Only Fedora release and updates are supported")
     proposed = validate_mirror_url(proposed_url)
-    if current_url == proposed:
-        raise ValueError("Proposed mirror is already configured")
     if not source_file.startswith("/etc/yum.repos.d/"):
         raise ValueError("Unexpected source configuration path")
     if Path(source_file).name != source_file.removeprefix("/etc/yum.repos.d/"):
         raise ValueError("Invalid source configuration path")
-    preview = (f"dnf5 config-manager setopt {repo_id}.baseurl={proposed} "
+    persistent = persistent_mirror_url(repo_id, proposed, target_release)
+    if current_url == persistent:
+        raise ValueError("Proposed version-independent mirror is already configured")
+    preview = (f"sudo dnf5 config-manager setopt '{repo_id}.baseurl={persistent}' "
                f"{repo_id}.metalink= {repo_id}.mirrorlist=")
     return ChangePlan(
         repo_id=repo_id, current_url=current_url or "(not configured)",
@@ -97,10 +121,10 @@ def build_change_plan(repo_id: str, current_url: str, proposed_url: str,
         target_file=str(OVERRIDE_PATH), preview=preview,
         installed_release=installed, target_release=target_release,
         warnings=(
-            "Preview only: nothing has been written or backed up.",
+            "Preview only: nothing has been written or backed up. Future Fedora releases on this mirror are not verified.",
             "DNF5 config-manager owns the override; no competing MirrorPilot fragment is created.",
-            "Inspect configuration origins before editing: another override may take precedence.",
-            "Back up the file manually, edit the existing repository section, then verify DNF5 effective settings.",
+            "Inspect configuration origins before running the command: another override may take precedence.",
+            "Back up existing settings, run the DNF5 command yourself, then verify effective settings.",
         ),
     )
 
