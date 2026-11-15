@@ -22,7 +22,7 @@ def test_unavailable_current_and_verified_alternative():
     assert len(lines) == 3
     assert "HTTP 404" in lines[0]
     assert "EE" in lines[1] and "284.9" in lines[1]
-    assert "1 problems" in lines[2]
+    assert "2 problems (current: 1, alternatives: 1)" in lines[2]
     assert "1 not fully checked" in lines[2]
 
 
