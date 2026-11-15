@@ -167,3 +167,9 @@ Use **Configuration origins…** in the main window to inspect where the selecte
 Repeated identical values are distinguished from differing definitions. A differing definition is **not automatically an error**: it can be an intentional override. This conservative file-level inspection does **not** establish DNF5's actual effective precedence, handle every DNF5 configuration source, or authorize writes. Malformed files and uncertain source combinations are reported rather than silently repaired.
 
 Run `python -m pytest -q tests/test_config_conflicts.py`. Next: compare these observations with libdnf5's authoritative effective configuration and add explicit uncertainty reporting before enabling any Apply operation.
+
+### Effective DNF5 values (read-only)
+
+The **Configuration origins…** dialog also queries `dnf5 --dump-repo-config=<repo-id>` and shows the effective settings beside file-level definitions. This avoids requiring usable repository metadata or network access. The query uses a validated repository ID, a shell-free subprocess, and an 8-second timeout. If DNF5 cannot provide values, the dialog still shows the file evidence and an explicit error.
+
+Effective values confirm what DNF5 resolves, **not** which particular file supplied each value. Do not interpret differing file definitions as proven errors or use this display to authorize privileged changes. Run `python -m pytest -q tests/test_dnf_effective.py`.
