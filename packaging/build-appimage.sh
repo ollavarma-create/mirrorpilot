@@ -25,7 +25,7 @@ python -m nuitka \
   --standalone \
   --assume-yes-for-downloads \
   --enable-plugin=pyside6 \
-  --include-qt-plugins=platforms,platformthemes,styles,imageformats,iconengines,xcbglintegrations \
+  --include-qt-plugins=platforms,platformthemes,imageformats,iconengines,xcbglintegrations \
   --include-package=mirrorpilot \
   --output-dir="$ROOT/dist" \
   --output-filename=mirrorpilot \
