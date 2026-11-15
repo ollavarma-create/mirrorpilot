@@ -40,6 +40,8 @@ class MainWindow(QMainWindow):
         self.resize(1120, 680)
         self.repos = []
         self.results = []
+        self.current_result = None
+        self.current_result_key = None
         self.threads = []
         self.workers = []
         self.running = False
@@ -241,6 +243,7 @@ class MainWindow(QMainWindow):
         configured = next((r for r in self.repos
                            if r.repo_id == self.scan_repo and r.status == "enabled"), None)
         self.configured_url = configured.baseurl.strip() if configured and configured.baseurl.strip().startswith("https://") else None
+        self.scan_key = (self.scan_release, self.scan_repo, self.configured_url)
         if current_only:
             self.run_job(check_current_repository,
                          (self.scan_release, self.scan_repo, self.configured_url),
@@ -265,6 +268,9 @@ class MainWindow(QMainWindow):
             self.details.setPlainText(error)
             return
         self.results = results
+        if self.current_only:
+            self.current_result = results[0] if results else None
+            self.current_result_key = self.scan_key
         self.render_results()
 
     def render_results(self):
@@ -274,8 +280,9 @@ class MainWindow(QMainWindow):
         uncertain = sum(r.health == "uncertain" for r in self.results)
         verified = sum(r.health == "verified" for r in self.results)
         self.summary.setWordWrap(True)
+        current = (self.current_result if self.current_result_key == self.scan_key else None)
         self.summary.setText("\n".join(summary_lines(
-            self.results, self.scan_release, self.scan_repo)))
+            self.results, self.scan_release, self.scan_repo, current=current)))
         for i, row in enumerate(self.results):
             speed = row.speed
             label = {"verified": "Verified", "problem": "Problem", "error": "Error",
