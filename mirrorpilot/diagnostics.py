@@ -29,7 +29,7 @@ def fastest_verified(rows):
     eligible = [r for r in rows if r.health == "verified" and r.speed.mbps is not None]
     return max(eligible, key=lambda r: r.speed.mbps) if eligible else None
 
-def run_diagnostics(release: str, progress=None, metadata_count: int = 1, repo: str = "fedora"):
+def run_diagnostics(release: str, metadata_count: int = 1, repo: str = "fedora", progress=None):
     """Benchmark eight, compare all indexes, stream metadata for fastest N.
 
     Default N=1 intentionally avoids downloading up to 12 GiB without
