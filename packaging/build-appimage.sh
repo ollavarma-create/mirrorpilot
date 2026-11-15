@@ -119,7 +119,7 @@ if [ -z "${SSL_CERT_FILE+x}" ]; then
   done
 fi
 
-exec "$BIN/mirrorpilot" "$@" 2> >(grep -v 'QtCore-postLoad' >&2)
+exec "$BIN/mirrorpilot" "$@"
 EOF
 chmod +x "$APPDIR/AppRun"
 
