@@ -22,6 +22,7 @@ from mirrorpilot.polkit_probe import parse_probe_response
 from mirrorpilot.config_conflicts import inspect_configuration, format_config_report
 from mirrorpilot.dnf_effective import read_effective_config, format_effective_comparison
 from mirrorpilot.write_preflight import assess_write_preflight, format_write_preflight
+from mirrorpilot.write_policy import validate_request, preview_options
 
 class Worker(QObject):
     finished = Signal(object, object)
@@ -450,10 +451,17 @@ class MainWindow(QMainWindow):
             preflight_text = format_write_preflight(preflight)
         except (OSError, ValueError) as exc:
             preflight_text = f"WRITE BLOCKED — preflight unavailable: {exc}"
+        try:
+            approved = validate_request(plan.repo_id, entry.speed.url)
+            options = preview_options(approved)
+            policy_text = ("Future helper request: VALIDATED (preview only)\\n"
+                           + "\\n".join(options))
+        except ValueError as exc:
+            policy_text = "Future helper request: BLOCKED — " + str(exc)
         dialog = QMessageBox(self)
         dialog.setIcon(QMessageBox.Icon.Information)
         dialog.setWindowTitle("Proposed DNF configuration — preview only")
-        dialog.setText(format_change_plan(plan) + "\n\n" + preflight_text)
+        dialog.setText(format_change_plan(plan) + "\n\n" + preflight_text + "\n\n" + policy_text)
         test_button = dialog.addButton("Test authorization", QMessageBox.ButtonRole.ActionRole)
         dialog.addButton(QMessageBox.StandardButton.Close)
         dialog.exec()
