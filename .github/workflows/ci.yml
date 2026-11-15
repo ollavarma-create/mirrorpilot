@@ -41,8 +41,8 @@ jobs:
           python -m pytest -q
 
       - name: Build AppImage
-        run: bash packaging/build-appimage.sh
-
+        run: bash packaging/polkit/build-appimage.sh
+          
       - name: Upload AppImage
         if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
         uses: actions/upload-artifact@v4
