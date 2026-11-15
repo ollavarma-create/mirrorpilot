@@ -4,10 +4,10 @@ from mirrorpilot.changes import build_change_plan, format_change_plan, validate_
 
 def test_preview_is_pure_and_shows_config_manager(tmp_path):
     source = "/etc/yum.repos.d/fedora.repo"
-    plan = build_change_plan("updates", "https://old.example.org/updates/45/",
-                             "https://new.example.org/updates/45/", source, target_release="45", installed_release="45")
+    plan = build_change_plan("updates", "https://old.example.org/fedora/linux/updates/45/Everything/x86_64/",
+                             "https://new.example.org/fedora/linux/updates/45/Everything/x86_64/", source, target_release="45", installed_release="45")
     assert plan.target_file == "/etc/dnf/repos.override.d/99-config_manager.repo"
-    assert "dnf5 config-manager setopt updates.baseurl=https://new.example.org/updates/45/" in plan.preview
+    assert "dnf5 config-manager setopt 'updates.baseurl=https://new.example.org/fedora/linux/updates/$releasever/Everything/$basearch/'" in plan.preview
     assert "updates.metalink= updates.mirrorlist=" in plan.preview
     assert "PREVIEW ONLY" in format_change_plan(plan)
     assert not list(tmp_path.iterdir())
@@ -15,10 +15,10 @@ def test_preview_is_pure_and_shows_config_manager(tmp_path):
 
 @pytest.mark.parametrize("bad", [
     "http://example.org/fedora/", "https://user:secret@example.org/fedora/",
-    "https://example.org/fedora/?x=1", "https://example.org/fedora/#fragment",
-    "https://example.org/$releasever/", "https://example.org/fedora/\nfoo=bar",
+    "https://example.org/fedora/linux/releases/45/Everything/x86_64/os/?x=1", "https://example.org/fedora/linux/releases/45/Everything/x86_64/os/#fragment",
+    "https://example.org/$releasever/", "https://example.org/fedora/linux/releases/45/Everything/x86_64/os/\nfoo=bar",
     "https://localhost/fedora/", "https://127.0.0.1/fedora/",
-    "https://example.org/fedora/../updates/", "https://example.org/fedora",
+    "https://example.org/fedora/linux/releases/45/Everything/x86_64/os/../updates/", "https://example.org/fedora",
 ])
 def test_reject_unsafe_mirror_urls(bad):
     with pytest.raises(ValueError):
@@ -36,8 +36,8 @@ def test_reject_unmanaged_repositories_and_paths():
 
 def test_noop_is_rejected():
     with pytest.raises(ValueError, match="already configured"):
-        build_change_plan("fedora", "https://example.org/fedora/",
-                          "https://example.org/fedora/", "/etc/yum.repos.d/fedora.repo", target_release="45", installed_release="45")
+        build_change_plan("fedora", "https://example.org/fedora/linux/releases/45/Everything/x86_64/os/",
+                          "https://example.org/fedora/linux/releases/45/Everything/x86_64/os/", "/etc/yum.repos.d/fedora.repo", target_release="45", installed_release="45")
 
 
 @pytest.mark.parametrize("installed,target,allowed", [
@@ -53,8 +53,8 @@ def test_release_policy(installed, target, allowed):
 def test_cross_release_change_plan_is_blocked():
     with pytest.raises(ValueError, match="Release mismatch"):
         build_change_plan(
-            "updates", "https://old.example.org/updates/44/",
-            "https://new.example.org/updates/45/",
+            "updates", "https://old.example.org/fedora/linux/updates/44/Everything/x86_64/",
+            "https://new.example.org/fedora/linux/updates/45/Everything/x86_64/",
             "/etc/yum.repos.d/fedora-updates.repo",
             target_release="45", installed_release="44"
         )
@@ -62,8 +62,8 @@ def test_cross_release_change_plan_is_blocked():
 
 def test_preview_does_not_propose_competing_fragment():
     plan = build_change_plan(
-        "fedora", "https://old.example.org/fedora/44/",
-        "https://new.example.org/fedora/44/",
+        "fedora", "https://old.example.org/fedora/linux/releases/44/Everything/x86_64/os/",
+        "https://new.example.org/fedora/linux/releases/44/Everything/x86_64/os/",
         "/etc/yum.repos.d/fedora.repo", target_release="44", installed_release="44",
     )
     output = format_change_plan(plan)
