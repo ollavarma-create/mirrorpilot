@@ -121,3 +121,19 @@ def test_declared_size_rejected_before_network(monkeypatch):
     import pytest
     with pytest.raises(audit.MetadataLimitExceeded):
         audit._hash_stream("https://example.org/file", "sha256", audit.MAX_FILE_BYTES + 1)
+
+
+def test_configured_source_metadata_verification(monkeypatch):
+    """The current source is not a country-coded discovered mirror."""
+    monkeypatch.setattr(audit, "_download", lambda *args: _manifest(size=5))
+    monkeypatch.setattr(audit, "_hash_stream",
+                        lambda *args: (hashlib.sha256(b"valid").hexdigest(), 5))
+    result = audit.audit_referenced("https://example.org/fedora/", "Configured", "45")
+    assert result.status == "metadata-match"
+
+
+def test_invalid_metadata_country_still_rejected_without_network(monkeypatch):
+    monkeypatch.setattr(audit, "_download",
+                        lambda *args: (_ for _ in ()).throw(AssertionError("network")))
+    result = audit.audit_referenced("https://example.org/fedora/", "RU", "45")
+    assert result.status == "unsupported"
