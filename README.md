@@ -108,3 +108,9 @@ The installed release, target release and repository selector share the top tool
 Select a **verified** alternative in the mirror results and choose **Preview configuration change…**. MirrorPilot builds a constrained proposal for the Fedora `fedora` or `updates` repository, showing the current URL, proposed URL, and intended override section. The preview is pure and performs **no write, backup, authorization or DNF operation**. Unverified mirrors cannot be proposed through this button.
 
 The proposed `/etc/dnf/repos.override.d/99_mirrorpilot.repo` is a *design target*, not an installed file. Existing overrides, DNF5 precedence, repository consistency and the security of an eventual privileged helper must be independently verified before implementing the actual write path. In particular, a helper must never trust GUI-provided paths, must revalidate the target, must back up the real pre-change state, and must support atomic rollback. No `pkexec` helper is installed or invoked yet.
+
+### Cross-release safety boundary
+
+The selected **Diagnose release** is for read-only investigation, not permission to change the installed Fedora release. A configuration change plan is allowed only when the diagnostic release is a known numeric release **equal to the installed Fedora release**. Otherwise the GUI displays a diagnostic-only warning instead of a DNF override proposal. This rule is also enforced in `changes.build_change_plan()`, with automated mismatch/unknown-version tests.
+
+For example, Fedora 44 users may benchmark Fedora 45 mirrors, but cannot use MirrorPilot to configure those Fedora 45 mirrors as active Fedora 44 repositories. System upgrades must use Fedora's official upgrade procedure. The future privileged helper must **independently re-read the installed release and validate the repository target**, and must not rely on the GUI or this unprivileged preview for authorization.
