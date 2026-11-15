@@ -153,8 +153,8 @@ class MainWindow(QMainWindow):
         self.verify_button.setText("Verify selected metadata")
         self.verify_button.setToolTip("Verify up to 3 referenced metadata files for the selected mirror (up to 512 MiB each). Read-only.")
         layout.addWidget(self.verify_button)
-        self.preview_button = QPushButton("Manual configuration instructions…")
-        self.preview_button.setToolTip("Show copyable settings and manual editing instructions. MirrorPilot never writes DNF configuration.")
+        self.preview_button = QPushButton("Copy DNF5 configuration command…")
+        self.preview_button.setToolTip("Show a copyable DNF5 config-manager command. MirrorPilot never runs it.")
         self.preview_button.setEnabled(False)
         self.preview_button.clicked.connect(self.preview_change)
         layout.addWidget(self.preview_button)
@@ -444,7 +444,7 @@ class MainWindow(QMainWindow):
         dialog.resize(820, 620)
         layout = QVBoxLayout(dialog)
         intro = QLabel(
-            f"Repository: {plan.repo_id} | Source file: {manual.file_path}\\n"
+            f"Repository: {plan.repo_id} | DNF5 override: {manual.file_path}\\n"
             "Review Configuration origins first: another DNF5 override may take precedence."
         )
         intro.setWordWrap(True)
@@ -453,19 +453,15 @@ class MainWindow(QMainWindow):
         instructions.setReadOnly(True)
         instructions.setPlainText(manual.instructions)
         layout.addWidget(instructions, 2)
-        layout.addWidget(QLabel("Section-scoped example (do not replace the whole file):"))
+        layout.addWidget(QLabel("Command to review and run yourself in a terminal:"))
         snippet = QTextEdit(dialog)
         snippet.setReadOnly(True)
         snippet.setPlainText(manual.snippet)
         snippet.setMaximumHeight(140)
         layout.addWidget(snippet)
         buttons = QHBoxLayout()
-        copy_button = QPushButton("Copy setting lines")
-        copy_button.clicked.connect(
-            lambda: QApplication.clipboard().setText(
-                "\\n".join(manual.snippet.splitlines()[1:]) + "\\n"
-            )
-        )
+        copy_button = QPushButton("Copy DNF5 command")
+        copy_button.clicked.connect(lambda: QApplication.clipboard().setText(manual.snippet))
         buttons.addWidget(copy_button)
         verify_button = QPushButton("Verify effective settings")
         def verify():
