@@ -1,0 +1,147 @@
+"""Qt 6 GUI for read-only DNF5 diagnostics."""
+from __future__ import annotations
+
+import sys
+from PySide6.QtCore import QObject, QThread, Signal, Slot
+from PySide6.QtWidgets import (
+    QApplication, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
+    QMainWindow, QMessageBox, QPushButton, QTableWidget, QTableWidgetItem,
+    QTextEdit, QVBoxLayout, QWidget,
+)
+from mirrorpilot.check import check_baseurl
+from mirrorpilot.repos import get_repositories
+
+
+class Worker(QObject):
+    finished = Signal(object, object)
+
+    def __init__(self, action, *args):
+        super().__init__()
+        self.action, self.args = action, args
+
+    @Slot()
+    def run(self):
+        try:
+            self.finished.emit(self.action(*self.args), None)
+        except Exception as error:
+            self.finished.emit(None, str(error))
+
+
+class MainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("MirrorPilot — DNF5 diagnostics (read-only)")
+        self.resize(1000, 600)
+        self.repos = []
+        self.threads = []
+
+        main = QWidget()
+        layout = QVBoxLayout(main)
+        layout.addWidget(QLabel("DNF5 software repositories — read-only preview"))
+        toolbar = QHBoxLayout()
+        toolbar.addWidget(QLabel("Release version:"))
+        self.version = QLineEdit()
+        self.version.setPlaceholderText("Current release or e.g. 45")
+        toolbar.addWidget(self.version)
+        self.refresh_button = QPushButton("Load repositories")
+        self.refresh_button.clicked.connect(self.load_repos)
+        toolbar.addWidget(self.refresh_button)
+        layout.addLayout(toolbar)
+
+        self.table = QTableWidget(0, 4)
+        self.table.setHorizontalHeaderLabels(["Repository", "Status", "Effective source", "Config file"])
+        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.table.itemSelectionChanged.connect(self.selection_changed)
+        layout.addWidget(self.table)
+
+        self.check_button = QPushButton("Check selected HTTPS base URL")
+        self.check_button.setEnabled(False)
+        self.check_button.clicked.connect(self.check_selected)
+        layout.addWidget(self.check_button)
+        self.details = QTextEdit()
+        self.details.setReadOnly(True)
+        self.details.setMaximumHeight(125)
+        layout.addWidget(self.details)
+        layout.addWidget(QLabel("No repositories, installed packages or DNF settings are changed."))
+        self.setCentralWidget(main)
+        self.statusBar().showMessage("Ready")
+        self.load_repos()
+
+    def run_job(self, action, args, callback):
+        thread = QThread(self)
+        worker = Worker(action, *args)
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.finished.connect(callback)
+        worker.finished.connect(thread.quit)
+        worker.finished.connect(worker.deleteLater)
+        thread.finished.connect(thread.deleteLater)
+        self.threads.append(thread)
+        thread.finished.connect(lambda: self.threads.remove(thread) if thread in self.threads else None)
+        thread.start()
+
+    def load_repos(self):
+        self.refresh_button.setEnabled(False)
+        self.check_button.setEnabled(False)
+        self.statusBar().showMessage("Reading effective DNF5 configuration...")
+        self.run_job(get_repositories, (self.version.text().strip() or None,), self.loaded)
+
+    def loaded(self, repos, error):
+        self.refresh_button.setEnabled(True)
+        if error:
+            self.statusBar().showMessage("Unable to read DNF5 repositories")
+            QMessageBox.warning(self, "DNF5 error", error)
+            return
+        self.repos = repos
+        self.table.setRowCount(len(repos))
+        for i, repo in enumerate(repos):
+            for col, value in enumerate((repo.name, repo.status, repo.source, repo.filename)):
+                self.table.setItem(i, col, QTableWidgetItem(value))
+        self.statusBar().showMessage(f"Found {len(repos)} repositories")
+
+    def selection_changed(self):
+        index = self.table.currentRow()
+        if not 0 <= index < len(self.repos):
+            self.check_button.setEnabled(False)
+            return
+        repo = self.repos[index]
+        self.details.setPlainText(
+            f"ID: {repo.repo_id}\nBase URL: {repo.baseurl}\n"
+            f"Metalink: {repo.metalink}\nMirrorlist: {repo.mirrorlist}"
+        )
+        url = repo.baseurl.strip()
+        self.check_button.setEnabled(
+            url.startswith("https://") and "$" not in url and " " not in url
+        )
+
+    def check_selected(self):
+        index = self.table.currentRow()
+        if not 0 <= index < len(self.repos):
+            return
+        self.check_button.setEnabled(False)
+        self.statusBar().showMessage("Testing repository metadata...")
+        self.run_job(check_baseurl, (self.repos[index].baseurl,), self.checked)
+
+    def checked(self, diagnostic, error):
+        self.selection_changed()
+        if error:
+            self.details.setPlainText("Diagnostic failed: " + error)
+            self.statusBar().showMessage("Diagnostic failed")
+        else:
+            self.details.setPlainText(
+                f"{diagnostic.status.upper()}: {diagnostic.message}\n{diagnostic.source}"
+            )
+            self.statusBar().showMessage(f"Diagnostic status: {diagnostic.status}")
+
+
+def main():
+    app = QApplication(sys.argv)
+    window = MainWindow()
+    window.show()
+    return app.exec()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

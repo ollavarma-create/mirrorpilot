@@ -1,0 +1,24 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mirrorpilot"
+version = "0.1.0a1"
+description = "Read-only repository diagnostics for DNF5-based Linux systems"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "GPL-3.0-only"
+dependencies = ["PySide6>=6.6"]
+
+[project.scripts]
+mirrorpilot = "mirrorpilot.app:main"
+
+[project.optional-dependencies]
+test = ["pytest>=8.0"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["mirrorpilot"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
