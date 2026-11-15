@@ -61,7 +61,7 @@ def test_dnf5_error_is_reported(monkeypatch):
 def test_comparison_labels_effective_value():
     result = parse_dump("updates", SAMPLE)
     rendered = format_effective_comparison(ConfigReport("updates", (), ()), result)
-    assert "authoritative values" in rendered
+    assert "DNF5 effective values (read-only)" in rendered
     assert "metalink = ''" in rendered
 
 
