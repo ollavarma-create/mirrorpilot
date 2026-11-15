@@ -4,6 +4,7 @@ from __future__ import annotations
 import sys
 from dataclasses import replace
 from PySide6.QtCore import QObject, QThread, Signal, Slot, QTimer, Qt
+from shiboken6 import isValid
 from PySide6.QtGui import QColor, QBrush
 from PySide6.QtWidgets import (
     QApplication, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow,
@@ -167,7 +168,7 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         # A completed Worker signal does not imply its QThread has stopped.
         # Let Qt process thread.finished and deferred deletions before exit.
-        active = [thread for thread in self.threads if thread.isRunning()]
+        active = [thread for thread in self.threads if isValid(thread) and thread.isRunning()]
         if active:
             event.ignore()
             self.statusBar().showMessage(
@@ -184,7 +185,7 @@ class MainWindow(QMainWindow):
         if thread in self.threads:
             self.threads.remove(thread)
         if getattr(self, "_close_pending", False) and not any(
-            t.isRunning() for t in self.threads
+            isValid(t) and t.isRunning() for t in self.threads
         ):
             self._close_pending = False
             QTimer.singleShot(0, self.close)
@@ -213,8 +214,8 @@ class MainWindow(QMainWindow):
             worker.progress.connect(progress)
         worker.finished.connect(thread.quit)
         worker.finished.connect(worker.deleteLater)
-        thread.finished.connect(thread.deleteLater)
         thread.finished.connect(lambda t=thread, w=worker: self._thread_finished(t, w))
+        thread.finished.connect(thread.deleteLater)
         thread.start()
 
     def load_repos(self):
