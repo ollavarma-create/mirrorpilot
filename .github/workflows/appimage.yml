@@ -29,6 +29,8 @@ jobs:
           cache: pip
       - name: Install dependencies
         run: |
+          sudo apt-get update
+          sudo apt-get install -y librsvg2-bin
           python -m pip install --upgrade pip
           python -m pip install '.[test]' 'pyinstaller>=6.0,<7'
       - name: Run unit tests
@@ -41,6 +43,8 @@ jobs:
           test -x dist/MirrorPilot.AppDir/usr/bin/mirrorpilot
           test -f dist/MirrorPilot.AppDir/mirrorpilot.desktop
           test -f dist/MirrorPilot.AppDir/mirrorpilot.svg
+          test -s dist/MirrorPilot.AppDir/mirrorpilot.png
+          test -e dist/MirrorPilot.AppDir/.DirIcon
       - name: Check artifact and checksum
         run: |
           test -s dist/SHA256SUMS
