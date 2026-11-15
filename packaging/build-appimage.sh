@@ -16,7 +16,7 @@ python -m nuitka --standalone --assume-yes-for-downloads \
 APPDIR="$ROOT/dist/MirrorPilot.AppDir"
 rm -rf "$APPDIR"
 mkdir -p "$APPDIR/usr/bin" "$APPDIR/usr/share/icons/hicolor/scalable/apps" "$APPDIR/usr/share/applications"
-cp -a "$ROOT/dist/__main__.dist/." "$APPDIR/usr/bin/"
+cp -a "$ROOT/dist/mirrorpilot.dist/." "$APPDIR/usr/bin/"
 cp "$ROOT/packaging/io.github.ollavarma_create.MirrorPilot.desktop" "$APPDIR/io.github.ollavarma_create.MirrorPilot.desktop"
 cp "$ROOT/packaging/io.github.ollavarma_create.MirrorPilot.desktop" "$APPDIR/usr/share/applications/io.github.ollavarma_create.MirrorPilot.desktop"
 mkdir -p "$APPDIR/usr/share/metainfo" "$APPDIR/usr/share/applications"
