@@ -43,7 +43,7 @@ def _run(root: Path, label: str, *, override_a: str | None = None,
                 encoding="utf-8",
             )
     args = [
-        "dnf5", f"--installroot={root}", f"--config={config}",
+        "dnf5", f"--installroot={root}", "--config=/etc/dnf/dnf.conf",
         "--releasever=44", "--setopt=reposdir=/etc/yum.repos.d",
         "--dump-repo-config=mirrorpilot-precedence-test",
     ]
@@ -55,13 +55,16 @@ def _run(root: Path, label: str, *, override_a: str | None = None,
         timeout=15, check=False,
     )
     print(f"\n=== {label} ===")
-    if result.returncode:
-        print(f"DNF5 exit code: {result.returncode}")
-        print(result.stderr.strip()[:1500])
+    header = '======== "mirrorpilot-precedence-test" repository configuration: ========'
+    found = header in result.stdout
+    if result.returncode or not found:
+        print(f"INCONCLUSIVE: DNF5 exit code={result.returncode}; test repository found={found}")
+        print("stdout:", repr(result.stdout[:1500]))
+        print("stderr:", repr(result.stderr[:1500]))
     for line in result.stdout.splitlines():
         if line.startswith(("baseurl =", "metalink =", "mirrorlist =", "enabled =")):
             print(line)
-    return result.returncode, result.stdout, result.stderr
+    return (result.returncode if result.returncode else (0 if found else 2)), result.stdout, result.stderr
 
 
 def main() -> int:
@@ -76,11 +79,14 @@ def main() -> int:
         )
         for label, a, b in cases:
             try:
-                _run(root, label, override_a=a, override_b=b)
+                code, stdout, stderr = _run(root, label, override_a=a, override_b=b)
+                if code:
+                    print("Stopping: cannot establish that DNF5 loaded the isolated repository.")
+                    return code
             except (OSError, subprocess.TimeoutExpired) as exc:
                 print(f"{label}: experiment failed: {exc}")
                 return 1
-    print("\nThis experiment is observational only. No system configuration was changed.")
+    print("\nAll test repositories were found. Experiment remains observational; no system configuration was changed.")
     return 0
 
 
