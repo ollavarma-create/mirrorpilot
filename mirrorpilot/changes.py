@@ -100,7 +100,7 @@ def build_change_plan(repo_id: str, current_url: str, proposed_url: str,
             "Preview only: nothing has been written or backed up.",
             "DNF5 config-manager owns the override; no competing MirrorPilot fragment is created.",
             "A privileged helper must snapshot and verify the existing config-manager override before applying.",
-            "Backup, authorization, atomic replacement, validation and rollback are required before enabling Apply.",
+            "Backup, authorization, durable journaling, effective-value validation and safe rollback are required before enabling Apply; DNF5 writes are not assumed atomic.",
         ),
     )
 
