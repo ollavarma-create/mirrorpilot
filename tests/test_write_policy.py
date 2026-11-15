@@ -10,6 +10,7 @@ def test_approved_request(repo):
     assert preview_options(request) == (
         f"{repo}.baseurl=https://mirror.example.fi/fedora/linux/",
         f"{repo}.metalink=",
+        f"{repo}.mirrorlist=",
     )
 
 
