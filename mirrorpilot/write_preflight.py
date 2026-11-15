@@ -24,7 +24,7 @@ def assess_write_preflight(plan: ChangePlan, report: ConfigReport,
                            effective: EffectiveConfig | None,
                            *, override_dir: Path = Path("/etc/dnf/repos.override.d"),
                            target_path: Path = OVERRIDE_PATH) -> WritePreflight:
-    """Conservatively refuse unknown precedence and unmanaged overrides.
+    """Conservatively assess DNF5-managed overrides without enabling writes.
 
     'allowed' currently remains False: there is no production-safe privileged
     writer, filesystem confinement or recovery procedure yet.
@@ -48,15 +48,14 @@ def assess_write_preflight(plan: ChangePlan, report: ConfigReport,
                 continue
             # We must not infer precedence from a lexical filename order.
             if Path(origin.path) != target_path:
-                reason = f"Unmanaged override defines {finding.key}: {origin.path}"
+                reason = f"Other override defines {finding.key}: {origin.path}"
                 if reason not in reasons:
                     reasons.append(reason)
     if target_path.is_symlink():
         reasons.append("Managed target is a symlink.")
     elif target_path.exists():
-        reasons.append("Existing managed target requires an ownership and content audit.")
-    if not reasons:
-        reasons.append("No production-safe privileged writer or verified DNF5 precedence policy is installed.")
+        reasons.append("Existing DNF5-managed override requires a snapshot and content audit before writing.")
+    reasons.append("No production-safe privileged writer is installed; this is preview only.")
     return WritePreflight(False, tuple(reasons))
 
 
