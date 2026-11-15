@@ -88,6 +88,39 @@ class SandboxDNFTransaction:
         _sync_directory(self.root)
         return "restored"
 
+    def recover_expected(self, expected_sha256: str) -> str:
+        """Recover PREPARED only when bytes match a separately verified prediction.
+
+        The prediction must be computed before the write from an isolated
+        fixture. Unknown or partially written content remains untouched.
+        Sandbox prototype only; not a privileged recovery authorization.
+        """
+        if os.geteuid() == 0:
+            raise RuntimeError("Root execution forbidden")
+        if (not isinstance(expected_sha256, str) or len(expected_sha256) != 64
+                or any(ch not in "0123456789abcdef" for ch in expected_sha256)):
+            raise ValueError("Invalid SHA-256")
+        fd = self._lock()
+        try:
+            doc = self._load()
+            if doc is None:
+                return "clean"
+            if doc["state"] != "PREPARED":
+                return self._recover_locked()
+            current = digest(self._read())
+            if current == doc["before_sha256"]:
+                self.journal.unlink()
+                _sync_directory(self.root)
+                return "already-original"
+            if current != expected_sha256:
+                return "conflict-manual-review"
+            self._restore(doc)
+            self.journal.unlink()
+            _sync_directory(self.root)
+            return "restored-expected"
+        finally:
+            os.close(fd)
+
     def recover(self) -> str:
         if os.geteuid() == 0:
             raise RuntimeError("Root execution forbidden")
