@@ -2,8 +2,9 @@
 from mirrorpilot.diagnostics import fastest_verified
 
 
-def summary_lines(rows, release, repo):
-    current = next((r for r in rows if r.speed.country == "Configured"), None)
+def summary_lines(rows, release, repo, current=None):
+    if current is None:
+        current = next((r for r in rows if r.speed.country == "Configured"), None)
     if current is None:
         current_line = "Current source: not tested (no supported configured HTTPS base URL)"
     elif current.speed.status != "measured":
@@ -32,6 +33,9 @@ def summary_lines(rows, release, repo):
     other_problems = sum(r.health in ("problem", "error") for r in alternatives)
     inconclusive = sum(r.health == "uncertain" for r in alternatives)
     unchecked = sum(r.health == "unchecked" for r in alternatives)
-    findings_line = (f"Other findings: {other_problems} problems · {inconclusive} inconclusive · "
+    current_problem = int(current is not None and current.health in ("problem", "error"))
+    total_problems = other_problems + current_problem
+    findings_line = (f"Findings: {total_problems} problems (current: {current_problem}, alternatives: {other_problems}) · "
+                     f"{inconclusive} inconclusive · "
                      f"{unchecked} not fully checked (Fedora {release} {repo})")
     return current_line, alternative_line, findings_line
