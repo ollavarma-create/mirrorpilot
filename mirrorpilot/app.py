@@ -62,7 +62,7 @@ class MainWindow(QMainWindow):
         self.check_button.setEnabled(False)
         self.check_button.clicked.connect(self.check_selected)
         layout.addWidget(self.check_button)
-        self.speed_button = QPushButton('Test Fedora mirror speeds (FI SE EE DE NL DK, max 8)')
+        self.speed_button = QPushButton('Benchmark approved mirrors (up to 8; read-only)')
         self.speed_button.clicked.connect(self.test_speeds)
         layout.addWidget(self.speed_button)
         self.details = QTextEdit()
@@ -144,11 +144,11 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage('Speed test failed')
             return
         if not results:
-            self.details.setPlainText('No HTTPS mirrors returned for selected countries.')
+            self.details.setPlainText('No approved mirror hosts found. No speed-test connections made.')
             return
         lines = []
         for result in results:
-            lines.append('{}: {} Mbit/s, {} ms | {} | {}'.format(result.status, result.mbps, result.milliseconds, result.url, result.message))
+            lines.append('{} [{}]: {} Mbit/s, TTFB {} ms, {} bytes | {} | {}'.format(result.status, result.country, result.mbps, result.ttfb_ms, result.bytes_read, result.url, result.detail))
         self.details.setPlainText('\n'.join(lines))
         self.statusBar().showMessage('Tested {} mirrors (indicative speeds)'.format(len(results)))
     def checked(self, diagnostic, error):
