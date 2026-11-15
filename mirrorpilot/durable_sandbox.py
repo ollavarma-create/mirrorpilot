@@ -99,7 +99,8 @@ class DurableSandboxTransaction:
             "mode": before.mode,
             "sha256": hashlib.sha256(before.contents).hexdigest() if before.existed else None,
         }
-        _write_atomic(self.journal, json.dumps({"version": 2, "state": state, "backup": backup,\n                                                "expected_after_sha256": hashlib.sha256(expected_after).hexdigest() if expected_after is not None else None},
+        _write_atomic(self.journal, json.dumps({"version": 2, "state": state, "backup": backup,
+                                                "expected_after_sha256": hashlib.sha256(expected_after).hexdigest() if expected_after is not None else None},
                                                 sort_keys=True).encode("utf-8"))
 
     def _backup(self, doc: dict) -> Snapshot:
