@@ -42,7 +42,13 @@ mkdir -p \
   "$APPDIR/usr/share/icons/hicolor/256x256/apps"
 
 # Nuitka-tuotokset
-cp -a "$ROOT/dist/mirrorpilot.dist/." "$APPDIR/usr/bin/"
+DIST_DIR=$(find "$ROOT/dist" -maxdepth 1 -type d -name '*.dist' | head -n1)
+if [[ -z "$DIST_DIR" ]]; then
+  echo "ERROR: no *.dist directory found" >&2
+  exit 1
+fi
+echo "Using dist dir: $DIST_DIR"
+cp -a "$DIST_DIR/." "$APPDIR/usr/bin/"
 
 # Desktop + AppStream
 cp "$ROOT/packaging/io.github.ollavarma_create.MirrorPilot.desktop" \
