@@ -14,6 +14,11 @@ python -m PyInstaller --noconfirm --clean --onedir \
 APPDIR="$ROOT/dist/MirrorPilot.AppDir"
 mkdir -p "$APPDIR/usr/bin" "$APPDIR/usr/share/icons/hicolor/scalable/apps" "$APPDIR/usr/share/applications"
 cp -a "$ROOT/dist/mirrorpilot/." "$APPDIR/usr/bin/"
+# Bundle fontconfig rules matching the bundled Ubuntu libfontconfig.
+# Keep font discovery on the host via /usr/share/fonts and ~/.local/share/fonts.
+mkdir -p "$APPDIR/usr/etc/fonts"
+cp -a /etc/fonts/fonts.conf /etc/fonts/conf.d "$APPDIR/usr/etc/fonts/"
+
 cp "$ROOT/packaging/io.github.ollavarma_create.MirrorPilot.desktop" "$APPDIR/io.github.ollavarma_create.MirrorPilot.desktop"
 cp "$ROOT/packaging/io.github.ollavarma_create.MirrorPilot.desktop" "$APPDIR/usr/share/applications/io.github.ollavarma_create.MirrorPilot.desktop"
 mkdir -p "$APPDIR/usr/share/metainfo" "$APPDIR/usr/share/applications"
@@ -43,6 +48,14 @@ if [ "${SSL_CERT_FILE+x}" != x ]; then
       break
     fi
   done
+fi
+# The bundled fontconfig may not understand newer host distribution rules.
+# Use matching packaged rules, while retaining host font directories.
+if [ "${FONTCONFIG_FILE+x}" != x ]; then
+  export FONTCONFIG_FILE="$HERE/usr/etc/fonts/fonts.conf"
+fi
+if [ "${FONTCONFIG_PATH+x}" != x ]; then
+  export FONTCONFIG_PATH="$HERE/usr/etc/fonts"
 fi
 exec "$HERE/usr/bin/mirrorpilot" "$@"
 EOF
