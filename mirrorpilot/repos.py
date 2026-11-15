@@ -1,14 +1,21 @@
-"""Read-only DNF5 repository discovery.
+"""Offline, read-only DNF5 repository configuration discovery.
 
-Uses DNF's effective configuration rather than separately parsing base
-.repo files and override settings, which have different precedence.
+Parses standard .repo files and DNF5 override fragments. No metadata
+cache or network access is required. This is a conservative parser:
+complex DNF5 configuration features may need a native libdnf5 backend.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
+from configparser import ConfigParser
+from pathlib import Path
 import os
 import re
-import subprocess
+
+REPO_DIR = Path("/etc/yum.repos.d")
+OVERRIDE_DIR = Path("/etc/dnf/repos.override.d")
+VERSION_FILE = Path("/etc/os-release")
+ARCH = os.uname().machine
 
 
 @dataclass(frozen=True)
@@ -26,61 +33,72 @@ class Repo:
         return self.baseurl or self.metalink or self.mirrorlist or "(not reported)"
 
 
-_FIELD = re.compile(r"^\s*([^:]+?)\s*:\s*(.*?)\s*$")
+def _read_ini(path: Path) -> ConfigParser:
+    config = ConfigParser(interpolation=None, strict=False)
+    config.optionxform = str.lower
+    with path.open(encoding="utf-8") as stream:
+        config.read_file(stream)
+    return config
 
 
-def parse_repo_info(output: str) -> list[Repo]:
-    """Parse the English text representation of dnf5 repo info --all."""
-    records = []
-    current: dict[str, str] = {}
-    for line in output.splitlines():
-        match = _FIELD.match(line)
-        if not match:
-            continue
-        key, value = match.groups()
-        key = key.strip().lower().replace(" ", "-")
-        if key == "repo-id":
-            if current:
-                records.append(current)
-            current = {"repo-id": value}
-        elif current:
-            current[key] = value
-    if current:
-        records.append(current)
-    return [
-        Repo(
-            repo_id=r["repo-id"],
-            name=r.get("repo-name", r["repo-id"]),
-            status=r.get("repo-status", r.get("enabled", "unknown")),
-            baseurl=r.get("repo-baseurl", ""),
-            metalink=r.get("repo-metalink", ""),
-            mirrorlist=r.get("repo-mirrorlist", ""),
-            filename=r.get("repo-filename", ""),
-        )
-        for r in records
-    ]
+def _version() -> str:
+    try:
+        content = VERSION_FILE.read_text(encoding="utf-8")
+        match = re.search(r'^VERSION_ID=["\']?([^"\'\n]+)', content, re.M)
+        return match.group(1) if match else "unknown"
+    except OSError:
+        return "unknown"
+
+
+def _expand(value: str, releasever: str) -> str:
+    """Expand basic DNF variables without interpreting shell syntax."""
+    return (value.replace("${releasever}", releasever)
+                 .replace("$releasever", releasever)
+                 .replace("${basearch}", ARCH)
+                 .replace("$basearch", ARCH)
+                 .replace("${arch}", ARCH)
+                 .replace("$arch", ARCH))
 
 
 def get_repositories(releasever: str | None = None) -> list[Repo]:
-    """Read cached DNF5 repository configuration without network refresh."""
-    cmd = ["dnf5"]
-    if releasever:
-        if not re.fullmatch(r"[a-zA-Z0-9_.-]{1,32}", releasever):
-            raise ValueError("Invalid release version")
-        cmd.append(f"--releasever={releasever}")
-    cmd += ["--cacheonly", "repo", "info", "--all"]
-    try:
-        proc = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=35,
-            env={**os.environ, "LC_ALL": "C"}, check=False,
+    if releasever and not re.fullmatch(r"[a-zA-Z0-9_.-]{1,32}", releasever):
+        raise ValueError("Invalid release version")
+    version = releasever or _version()
+    records: dict[str, dict[str, str]] = {}
+    origins: dict[str, str] = {}
+
+    for path in sorted(REPO_DIR.glob("*.repo")):
+        try:
+            config = _read_ini(path)
+        except (OSError, ValueError) as exc:
+            raise RuntimeError(f"Unable to read {path}: {exc}") from exc
+        for section in config.sections():
+            values = dict(config.items(section))
+            records.setdefault(section, {}).update(values)
+            origins[section] = str(path)
+
+    # DNF5 override fragments have higher priority than .repo entries.
+    for path in sorted(OVERRIDE_DIR.glob("*.repo")):
+        try:
+            config = _read_ini(path)
+        except (OSError, ValueError) as exc:
+            raise RuntimeError(f"Unable to read {path}: {exc}") from exc
+        for section in config.sections():
+            if section in records:
+                records[section].update(dict(config.items(section)))
+
+    if not records:
+        raise RuntimeError("No .repo files found in /etc/yum.repos.d")
+
+    return [
+        Repo(
+            repo_id=repo_id,
+            name=_expand(data.get("name", repo_id), version),
+            status="enabled" if data.get("enabled", "1").strip().lower() in ("1", "true", "yes") else "disabled",
+            baseurl=_expand(data.get("baseurl", ""), version),
+            metalink=_expand(data.get("metalink", ""), version),
+            mirrorlist=_expand(data.get("mirrorlist", ""), version),
+            filename=origins[repo_id],
         )
-    except FileNotFoundError as exc:
-        raise RuntimeError("dnf5 is not installed") from exc
-    except subprocess.TimeoutExpired as exc:
-        raise RuntimeError("DNF5 timed out") from exc
-    if proc.returncode:
-        raise RuntimeError((proc.stderr or proc.stdout or "DNF5 failed").strip())
-    repos = parse_repo_info(proc.stdout)
-    if not repos:
-        raise RuntimeError("DNF5 output not recognized; please report this version")
-    return repos
+        for repo_id, data in sorted(records.items())
+    ]
