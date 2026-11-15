@@ -111,7 +111,12 @@ def main() -> int:
         print("Journal state:", tx._load()["state"])
         outcome = tx.recover_expected(expected_sha)
         print("Recovery:", outcome)
-        if outcome == "restored-expected":\n            print("PASS: exact predicted DNF5 output safely restored to original bytes.")\n            if target.read_bytes() != before.contents:\n                print("FAIL: restored bytes differ.")\n                return 3\n        elif outcome == "conflict-manual-review":
+        if outcome == "restored-expected":
+            print("PASS: exact predicted DNF5 output safely restored to original bytes.")
+            if target.read_bytes() != before.contents:
+                print("FAIL: restored bytes differ.")
+                return 3
+        elif outcome == "conflict-manual-review":
             print("PASS: unknown PREPARED result retained for manual review.")
         elif outcome == "already-original":
             print("PASS: no write observed; unchanged snapshot recovered.")
