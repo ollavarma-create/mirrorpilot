@@ -39,3 +39,15 @@ def test_instructions_contain_real_newlines_not_literal_escape_sequences():
     assert "\n" in manual.instructions
     assert "\\n" not in manual.instructions
     assert any(line.startswith("1. Inspect") for line in manual.instructions.splitlines())
+
+
+def test_mismatch_is_informational_and_shows_both_mirrors():
+    p = plan()
+    ok, message = verify_effective_values(
+        p, {"baseurl": "https://old.example.org/updates/45/", "metalink": "", "mirrorlist": ""}
+    )
+    assert not ok
+    assert "Current configuration differs from recommendation." in message
+    assert "Current mirror: https://old.example.org/updates/45/" in message
+    assert "Recommended mirror: https://new.example.org/updates/45/" in message
+    assert "No changes have been made by MirrorPilot." in message
