@@ -5,5 +5,5 @@ Comment=Read-only Fedora DNF5 mirror diagnostics
 Exec=mirrorpilot
 Icon=mirrorpilot
 Terminal=false
-Categories=System;Utility;
+Categories=System;
 StartupNotify=true
