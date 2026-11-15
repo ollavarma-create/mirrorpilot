@@ -44,7 +44,7 @@ jobs:
       - name: Check artifact and checksum
         run: |
           test -s dist/SHA256SUMS
-          sha256sum -c dist/SHA256SUMS
+          (cd dist && sha256sum -c SHA256SUMS)
       - name: Upload test artifact
         uses: actions/upload-artifact@v4
         with:
