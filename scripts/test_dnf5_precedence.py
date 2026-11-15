@@ -61,6 +61,32 @@ def _run(root: Path, label: str, *, override_a: str | None = None,
         print(f"INCONCLUSIVE: DNF5 exit code={result.returncode}; test repository found={found}")
         print("stdout:", repr(result.stdout[:1500]))
         print("stderr:", repr(result.stderr[:1500]))
+    if result.returncode or not found:
+        print("Diagnosing isolated configuration path resolution:")
+        variants = (
+            ("installroot with absolute config", [
+                "dnf5", f"--installroot={root}", f"--config={config}",
+                "--releasever=44", f"--setopt=reposdir={repo_dir}",
+                "--dump-repo-config=mirrorpilot-precedence-test",
+            ]),
+            ("installroot with root-relative config and absolute reposdir", [
+                "dnf5", f"--installroot={root}", "--config=/etc/dnf/dnf.conf",
+                "--releasever=44", f"--setopt=reposdir={repo_dir}",
+                "--dump-repo-config=mirrorpilot-precedence-test",
+            ]),
+            ("explicit temporary config without installroot", [
+                "dnf5", f"--config={config}", "--releasever=44",
+                f"--setopt=reposdir={repo_dir}",
+                "--dump-repo-config=mirrorpilot-precedence-test",
+            ]),
+        )
+        for variant, command in variants:
+            probe = subprocess.run(command, cwd=root, env=env, capture_output=True,
+                                   text=True, timeout=15, check=False)
+            print(f"  {variant}: exit={probe.returncode}, "
+                  f"found={header in probe.stdout}")
+            print(f"    stdout: {probe.stdout[:500]!r}")
+            print(f"    stderr: {probe.stderr[:500]!r}")
     for line in result.stdout.splitlines():
         if line.startswith(("baseurl =", "metalink =", "mirrorlist =", "enabled =")):
             print(line)
