@@ -485,7 +485,12 @@ class MainWindow(QMainWindow):
         def verify():
             try:
                 effective = read_effective_config(plan.repo_id)
-                ok, message = verify_effective_values(plan, effective.values)
+                current_repos = get_repositories(plan.target_release)
+                current_repo = next((repo for repo in current_repos
+                                     if repo.repo_id == plan.repo_id), None)
+                raw = current_repo.raw_baseurl if current_repo is not None else None
+                ok, message = verify_effective_values(plan, effective.values,
+                                                      raw_baseurl=raw)
             except (RuntimeError, ValueError, OSError) as exc:
                 ok, message = False, f"Could not read DNF5 effective settings: {exc}"
             if ok:
