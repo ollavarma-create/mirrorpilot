@@ -14,7 +14,7 @@ from mirrorpilot.check import check_baseurl
 from mirrorpilot.repos import get_repositories, _version
 from mirrorpilot.releases import available_targets
 from mirrorpilot.audit import audit_referenced
-from mirrorpilot.diagnostics import run_diagnostics, fastest_verified
+from mirrorpilot.diagnostics import run_diagnostics, fastest_verified, explain_source
 
 class Worker(QObject):
     finished = Signal(object, object)
@@ -256,7 +256,8 @@ class MainWindow(QMainWindow):
             if row is winner:
                 label = "★ Recommended"
             if speed.country == "Configured":
-                label = "Current · " + label
+                label = "Current · " + ("Unavailable" if speed.status == "error" and
+                          ("404" in speed.detail or "Not Found" in speed.detail) else label)
             checks = f"{row.index.status if row.index else '—'} / {row.metadata.status if row.metadata else 'not checked'}"
             values = [speed.country, speed.url,
                       f"{speed.mbps:.2f}" if speed.mbps is not None else "—",
@@ -273,16 +274,13 @@ class MainWindow(QMainWindow):
                     item.setForeground(QBrush(QColor("#166534")))
                 self.mirrors.setItem(i, j, item)
         current = next((r for r in self.results if r.speed.country == "Configured"), None)
-        if current is None:
-            self.summary.setText("Configured source not tested (no enabled concrete HTTPS baseurl found). "
-                                 + self.summary.text())
-        elif current.health == "verified":
-            self.summary.setText("Current source: checked metadata OK; no change required for integrity. "
-                                 + self.summary.text())
-        else:
-            self.summary.setText(f"Current source: {current.health}; inspect details. " + self.summary.text())
+        self.summary.setWordWrap(True)
+        self.summary.setText(explain_source(current) + "  " + self.summary.text())
         self.statusBar().showMessage("Diagnostics complete")
-        self.selected_mirror()
+        if current is not None and current.health in ("problem", "error", "uncertain"):
+            self.mirrors.selectRow(self.results.index(current))
+        else:
+            self.selected_mirror()
 
     def selected_mirror(self):
         row = self.mirrors.currentRow()
