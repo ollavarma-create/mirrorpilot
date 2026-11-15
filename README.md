@@ -153,3 +153,9 @@ sudo rm -f /usr/libexec/mirrorpilot-auth-probe /usr/share/polkit-1/actions/org.m
 ```
 
 Run `python -m pytest -q tests/test_polkit_probe.py` for parser tests. This is an optional local integration test, not an automatic installation. Do not invoke the entire MirrorPilot GUI through `pkexec` or `sudo`. The eventual production helper will be separate and require independent authorization and input validation.
+
+### DNF change request protocol (validation-only)
+
+`mirrorpilot/apply_protocol.py` defines a size-limited JSON request with an exact field allowlist: protocol, operation (`preview` only), repository (`fedora` or `updates`), release and concrete HTTPS mirror URL. Arbitrary target paths, unknown fields and `apply` operations are rejected. A separate release check requires equality with the installed Fedora release. This is **not** a privileged writer, and no new authorization or GUI Apply path has been enabled.
+
+Run `python -m pytest -q tests/test_apply_protocol.py`. Before a production helper can write anything, it must recheck all inputs and DNF5's effective configuration under root, securely bind the verified mirror to the requested repository, and implement root-owned backup/rollback and crash recovery.
