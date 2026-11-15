@@ -237,7 +237,7 @@ class MainWindow(QMainWindow):
             diagnostic = format_effective_comparison(report, effective)
             intro = "DNF5 effective settings and their file definitions (read-only)."
         except (RuntimeError, ValueError) as exc:
-            diagnostic = (f"DNF5 effective configuration unavailable: {exc}"\n                          "\\n\\n" + format_config_report(report))
+            diagnostic = f"DNF5 effective configuration unavailable: {exc}" + "\n\n" + format_config_report(report)
             intro = "File-level evidence only; DNF5 effective configuration unavailable."
         explanation = QLabel(intro)
         explanation.setWordWrap(True)
