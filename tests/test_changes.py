@@ -36,7 +36,7 @@ def test_reject_unmanaged_repositories_and_paths():
 
 def test_noop_is_rejected():
     with pytest.raises(ValueError, match="already configured"):
-        build_change_plan("fedora", "https://example.org/fedora/linux/releases/45/Everything/x86_64/os/",
+        build_change_plan("fedora", "https://example.org/fedora/linux/releases/$releasever/Everything/$basearch/os/",
                           "https://example.org/fedora/linux/releases/45/Everything/x86_64/os/", "/etc/yum.repos.d/fedora.repo", target_release="45", installed_release="45")
 
 
