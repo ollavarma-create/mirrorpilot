@@ -95,3 +95,26 @@ def test_interruption_after_applied_restores_exact_backup(sandbox, monkeypatch):
     assert tx.journal.exists()
     assert tx.recover() == "restored"
     assert tx.tx.target.read_bytes() == b"# original\\n"
+
+
+def test_prepared_exact_expected_output_can_be_restored(sandbox):
+    tx = SandboxDNFTransaction(sandbox)
+    before, expected = b"original", b"normalized DNF output"
+    tx.tx.target.write_bytes(expected)
+    tx._save({"version": 1, "state": "PREPARED",
+              "before_hex": before.hex(), "before_mode": 0o600,
+              "before_sha256": digest(before), "after_sha256": None})
+    assert tx.recover_expected(digest(expected)) == "restored-expected"
+    assert tx.tx.target.read_bytes() == before
+    assert not tx.journal.exists()
+
+
+def test_prepared_unexpected_output_remains_untouched(sandbox):
+    tx = SandboxDNFTransaction(sandbox)
+    tx.tx.target.write_bytes(b"third party")
+    tx._save({"version": 1, "state": "PREPARED",
+              "before_hex": b"original".hex(), "before_mode": 0o600,
+              "before_sha256": digest(b"original"), "after_sha256": None})
+    assert tx.recover_expected(digest(b"expected")) == "conflict-manual-review"
+    assert tx.tx.target.read_bytes() == b"third party"
+    assert tx.journal.exists()
