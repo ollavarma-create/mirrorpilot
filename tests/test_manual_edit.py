@@ -29,8 +29,8 @@ def test_manual_command_uses_dnf5_config_manager():
 def test_effective_settings_match_only_with_no_competing_metalink():
     p = plan()
     expected = "https://new.example.org/fedora/linux/updates/$releasever/Everything/$basearch/"
-    assert verify_effective_values(p, {"baseurl": expected, "metalink": "", "mirrorlist": ""})[0]
-    assert not verify_effective_values(p, {"baseurl": expected, "metalink": "https://other.example.org/", "mirrorlist": ""})[0]
+    assert verify_effective_values(p, {"baseurl": expected, "metalink": "", "mirrorlist": ""}, raw_baseurl=expected)[0]
+    assert not verify_effective_values(p, {"baseurl": expected, "metalink": "https://other.example.org/", "mirrorlist": ""}, raw_baseurl=expected)[0]
     assert not verify_effective_values(p, {"baseurl": "https://other.example.org/", "metalink": "", "mirrorlist": ""})[0]
 
 
@@ -51,3 +51,12 @@ def test_mismatch_is_informational_and_shows_both_mirrors():
     assert "Current mirror: https://old.example.org/fedora/linux/updates/45/Everything/x86_64/" in message
     assert "Recommended setting: https://new.example.org/fedora/linux/updates/$releasever/Everything/$basearch/" in message
     assert "No changes have been made by MirrorPilot." in message
+
+
+def test_expanded_effective_and_saved_template():
+    p = plan()
+    template = "https://new.example.org/fedora/linux/updates/$releasever/Everything/$basearch/"
+    expanded = "https://new.example.org/fedora/linux/updates/45/Everything/x86_64/"
+    assert verify_effective_values(p, {"baseurl": expanded, "metalink": "", "mirrorlist": ""}, raw_baseurl=template)[0]
+    assert not verify_effective_values(p, {"baseurl": expanded, "metalink": "", "mirrorlist": ""}, raw_baseurl=expanded)[0]
+    assert not verify_effective_values(p, {"baseurl": expanded, "metalink": "", "mirrorlist": ""})[0]
