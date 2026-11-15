@@ -7,6 +7,7 @@ precedence. Compare with libdnf5 before allowing configuration writes.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from configparser import Error as ConfigParserError
 from pathlib import Path
 
 from mirrorpilot import repos
@@ -48,7 +49,7 @@ def inspect_configuration(repo_id: str, repo_dir: Path | None = None,
         for path in sorted(directory.glob("*.repo")):
             try:
                 config = repos._read_ini(path)
-            except (OSError, ValueError) as exc:
+            except (OSError, ValueError, ConfigParserError) as exc:
                 warnings.append(f"Could not parse {path}: {exc}")
                 continue
             if not config.has_section(repo_id):
