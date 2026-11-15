@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import sys
 from dataclasses import replace
-from PySide6.QtCore import QObject, QThread, Signal, Slot, QTimer, Qt
+from PySide6.QtCore import QObject, QThread, Signal, Slot, QTimer, Qt, QProcess
 from PySide6.QtGui import QColor, QBrush
 from PySide6.QtWidgets import (
     QApplication, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow,
@@ -17,6 +17,7 @@ from mirrorpilot.audit import audit_referenced
 from mirrorpilot.diagnostics import run_diagnostics, check_current_repository, fastest_verified, explain_source
 from mirrorpilot.summary import summary_lines
 from mirrorpilot.changes import build_change_plan, format_change_plan, release_change_allowed
+from mirrorpilot.polkit_probe import parse_probe_response
 
 class Worker(QObject):
     finished = Signal(object, object)
@@ -46,6 +47,7 @@ class MainWindow(QMainWindow):
         self.threads = []
         self.workers = []
         self.running = False
+        self.auth_process = None
         self.spinner = 0
         self.progress_text = "Finding mirrors…"
         self.timer = QTimer(self)
@@ -393,8 +395,67 @@ class MainWindow(QMainWindow):
         except ValueError as exc:
             QMessageBox.warning(self, "Preview unavailable", str(exc))
             return
-        QMessageBox.information(self, "Proposed DNF configuration — preview only",
-                                format_change_plan(plan))
+        dialog = QMessageBox(self)
+        dialog.setIcon(QMessageBox.Icon.Information)
+        dialog.setWindowTitle("Proposed DNF configuration — preview only")
+        dialog.setText("Read-only preview. No repository settings will be changed.")
+        dialog.setDetailedText(format_change_plan(plan))
+        test_button = dialog.addButton("Test authorization", QMessageBox.ButtonRole.ActionRole)
+        dialog.addButton(QMessageBox.StandardButton.Close)
+        dialog.exec()
+        if dialog.clickedButton() is test_button:
+            self.test_authorization()
+
+    def test_authorization(self):
+        """Run the separately installed read-only helper, never the GUI, via pkexec."""
+        if self.auth_process is not None:
+            QMessageBox.information(self, "Authorization test", "An authorization test is already running.")
+            return
+        process = QProcess(self)
+        self.auth_process = process
+        process.setProgram("/usr/bin/pkexec")
+        process.setArguments(["/usr/libexec/mirrorpilot-auth-probe"])
+        process.setProcessChannelMode(QProcess.ProcessChannelMode.SeparateChannels)
+        process.finished.connect(self.authorization_finished)
+        process.errorOccurred.connect(self.authorization_error)
+        self.statusBar().showMessage("Waiting for Polkit authorization…")
+        process.start()
+
+    def authorization_error(self, error):
+        if self.auth_process is None:
+            return
+        if error == QProcess.ProcessError.FailedToStart:
+            self.finish_authorization("Could not start pkexec. Is polkit installed?", success=False)
+
+    def authorization_finished(self, exit_code, exit_status):
+        process = self.auth_process
+        if process is None:
+            return
+        output = bytes(process.readAllStandardOutput()).decode("utf-8", errors="replace")
+        error = bytes(process.readAllStandardError()).decode("utf-8", errors="replace")
+        if exit_status != QProcess.ExitStatus.NormalExit or exit_code != 0:
+            detail = error.strip()[:500] or "Authorization canceled or denied."
+            self.finish_authorization(f"Authorization was not completed (exit {exit_code}).\\n{detail}", success=False)
+            return
+        try:
+            response = parse_probe_response(output.strip())
+        except ValueError as exc:
+            self.finish_authorization(f"Helper returned an invalid response: {exc}", success=False)
+            return
+        self.finish_authorization(
+            f"Authorization succeeded. Helper effective UID: {response['effective_uid']}.\\n"
+            "The probe performed no repository writes.", success=True)
+
+    def finish_authorization(self, message, *, success):
+        process = self.auth_process
+        self.auth_process = None
+        if process is not None:
+            process.deleteLater()
+        self.statusBar().showMessage("Authorization test complete" if success else "Authorization test failed")
+        if success:
+            QMessageBox.information(self, "Polkit authorization test", message)
+        else:
+            QMessageBox.warning(self, "Polkit authorization test", message)
 
     def verify_selected(self):
         row = self.mirrors.currentRow()
