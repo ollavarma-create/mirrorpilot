@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
 from mirrorpilot.check import check_baseurl
 from mirrorpilot.repos import get_repositories, _version
 from mirrorpilot.speed import benchmark
-from mirrorpilot.audit import audit
+from mirrorpilot.audit import audit, audit_referenced
 
 
 class Worker(QObject):
@@ -85,6 +85,10 @@ class MainWindow(QMainWindow):
         self.audit_button.setEnabled(False)
         self.audit_button.clicked.connect(self.audit_selected)
         layout.addWidget(self.audit_button)
+        self.metadata_button = QPushButton('Verify referenced metadata (up to 3 files, 32 MiB each)')
+        self.metadata_button.setEnabled(False)
+        self.metadata_button.clicked.connect(self.verify_selected_metadata)
+        layout.addWidget(self.metadata_button)
         self.speed_table.itemSelectionChanged.connect(self.audit_selection_changed)
         self.benchmark_results = []
         self.details = QTextEdit()
@@ -188,6 +192,7 @@ class MainWindow(QMainWindow):
             return
         self.benchmark_results = results
         self.audit_button.setEnabled(False)
+        self.metadata_button.setEnabled(False)
         self.speed_table.setRowCount(len(results))
         for i, result in enumerate(results):
             values = (result.country, result.url, str(result.mbps) if result.mbps is not None else '-',
@@ -200,6 +205,7 @@ class MainWindow(QMainWindow):
     def audit_selection_changed(self):
         row = self.speed_table.currentRow()
         self.audit_button.setEnabled(0 <= row < len(self.benchmark_results))
+        self.metadata_button.setEnabled(0 <= row < len(self.benchmark_results))
 
     def audit_selected(self):
         row = self.speed_table.currentRow()
@@ -218,6 +224,24 @@ class MainWindow(QMainWindow):
             return
         self.details.setPlainText(f'{result.status.upper()}: {result.message}\n{result.source}')
         self.statusBar().showMessage('Mirror index audit: ' + result.status)
+
+    def verify_selected_metadata(self):
+        row = self.speed_table.currentRow()
+        if not 0 <= row < len(self.benchmark_results):
+            return
+        result = self.benchmark_results[row]
+        self.metadata_button.setEnabled(False)
+        self.metadata_button.setText('Checking referenced metadata…')
+        self.run_job(audit_referenced, (result.url, result.country, self.version.text().strip() or _version()), self.metadata_finished)
+
+    def metadata_finished(self, result, error):
+        self.metadata_button.setText('Verify referenced metadata (up to 3 files, 32 MiB each)')
+        self.audit_selection_changed()
+        if error:
+            self.details.setPlainText('Metadata verification failed: ' + error)
+            return
+        self.details.setPlainText(f'{result.status.upper()}: {result.message}\n{result.source}')
+        self.statusBar().showMessage('Metadata verification: ' + result.status)
 
     def checked(self, diagnostic, error):
         self.selection_changed()
