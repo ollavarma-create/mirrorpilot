@@ -81,7 +81,10 @@ class SandboxDNFTransaction:
             self.journal.unlink()
             _sync_directory(self.root)
             return "already-original"
-        if doc["state"] == "PREPARED" or current != doc.get("after_sha256"):
+        if doc["state"] == "PREPARED":
+            if doc.get("expected_sha256") is None or current != doc["expected_sha256"]:
+                return "conflict-manual-review"
+        elif current != doc.get("after_sha256"):
             return "conflict-manual-review"
         self._restore(doc)
         self.journal.unlink()
@@ -130,7 +133,7 @@ class SandboxDNFTransaction:
         finally:
             os.close(fd)
 
-    def apply(self, command: list[str], verify, checkpoint=None) -> str:
+    def apply(self, command: list[str], verify, checkpoint=None, *, expected_sha256: str | None = None) -> str:
         """Run a caller-provided sandboxed DNF5 command, never an arbitrary host writer.
 
         The command must start with bwrap and use a read-only root bind. This
@@ -140,6 +143,10 @@ class SandboxDNFTransaction:
             raise RuntimeError("Root execution forbidden")
         if not command or Path(command[0]).name != "bwrap" or "--ro-bind" not in command:
             raise ValueError("Only bwrap-confined test commands accepted")
+        if expected_sha256 is not None and (
+                type(expected_sha256) is not str or len(expected_sha256) != 64
+                or any(ch not in "0123456789abcdef" for ch in expected_sha256)):
+            raise ValueError("Invalid expected SHA-256")
         fd = self._lock()
         try:
             if self._load() is not None:
@@ -151,6 +158,7 @@ class SandboxDNFTransaction:
                 "before_mode": before.mode,
                 "before_sha256": digest(before.contents),
                 "after_sha256": None,
+                "expected_sha256": expected_sha256,
             }
             self._save(doc)
             if checkpoint:
