@@ -8,7 +8,7 @@ MirrorPilot helps you investigate slow or broken Fedora repository mirrors, comp
 
 ![MirrorPilot main window showing Fedora repositories, tested mirrors, and diagnostics](docs/images/mirrorpilot-main.png)
 
-*Screenshot placeholder — add your own screenshot at `docs/images/mirrorpilot-main.png`.*
+*Mirror comparison and diagnostic results.*
 
 ## Why MirrorPilot?
 
@@ -52,7 +52,7 @@ No `sudo` is needed to run MirrorPilot. If you already have a local checkout, up
 
 ![MirrorPilot dialog showing the copyable DNF5 configuration command](docs/images/mirrorpilot-command.png)
 
-*Screenshot placeholder — add `docs/images/mirrorpilot-command.png`.*
+*Review and copy the DNF5 command before making changes yourself.*
 
 ### Example: a manual DNF5 command
 
@@ -78,7 +78,7 @@ For `dnf5 check-update`, exit code **100** means updates are available, **0** me
 
 ![MirrorPilot successful DNF5 effective-settings verification dialog](docs/images/mirrorpilot-verification.png)
 
-*Screenshot placeholder — add `docs/images/mirrorpilot-verification.png`.*
+*Check effective DNF5 settings after running the command.*
 
 ## What the results mean
 
