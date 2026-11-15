@@ -42,3 +42,17 @@ def test_timeout_distinguished_from_404():
     lines = summary_lines([row("Configured", status="error", detail="The read operation timed out", mbps=None)], "45", "updates")
     assert "timed out" in lines[0]
     assert "404" not in lines[0]
+
+def test_preserved_current_problem_counted_when_only_alternatives_displayed():
+    current = row("Configured", index="different", metadata="metadata-match")
+    alternatives = [row("EE", mbps=250), row("DK", index="different", metadata=None)]
+    lines = summary_lines(alternatives, "45", "updates", current=current)
+    assert "index differs" in lines[0]
+    assert "EE" in lines[1]
+    assert "2 problems (current: 1, alternatives: 1)" in lines[2]
+
+
+def test_current_only_mismatch_counts_as_problem():
+    current = row("Configured", index="different", metadata="metadata-match")
+    lines = summary_lines([current], "45", "updates")
+    assert "1 problems (current: 1, alternatives: 0)" in lines[2]
