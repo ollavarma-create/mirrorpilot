@@ -10,13 +10,13 @@ Make DNF5 software sources understandable from a Qt graphical interface. MirrorP
 
 ## Current proof of concept
 
-- List enabled and disabled repositories through `dnf5 repo info --all`.
+- List repositories offline from `.repo` files and DNF5 override fragments.
 - Inspect effective repository source URLs as reported by DNF5.
 - Optionally query the configuration for another Fedora release using `--releasever`.
 - Check one direct, concrete HTTPS base URL by retrieving `repodata/repomd.xml`, checking referenced metadata files and validating SHA-256/SHA-512 checksums.
-- Perform potentially slow operations in background Qt threads.
+- On demand, benchmark up to 8 Fedora base mirrors returned by country-filtered MirrorManager (FI, SE, EE, DE, NL, DK), using at most 512 KiB of `repomd.xml` per mirror.\n- Perform potentially slow operations in background Qt threads.
 
-**Limitations:** DNF5's human-readable CLI output is not a stable API, and must be checked on actual Fedora installations. This alpha does not expand DNF variables, resolve metalinks, rank mirrors, determine geographic location, compare freshness against upstream or edit settings. Hash verification demonstrates internal consistency, not freshness or publisher authenticity. Downloads have per-file limits.
+**Limitations:** DNF5's human-readable CLI output is not a stable API, and must be checked on actual Fedora installations. This alpha only expands basic DNF variables, does not reproduce every DNF5 precedence rule, and does not compare freshness against upstream or edit settings. The speed test uses a small bounded transfer, so results include connection latency and are not sustained bulk throughput. MirrorManager's country filter does not guarantee the physical location of a server. Speed results do not prove metadata integrity. Hash verification demonstrates internal consistency, not freshness or publisher authenticity. Downloads have per-file limits.
 
 ## Run on Fedora KDE
 
