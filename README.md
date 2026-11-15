@@ -36,13 +36,11 @@ python -m pip install -e '.[test]'
 pytest -q
 ```
 
-## Manual configuration workflow (current)
+## User-run DNF5 configuration workflow (current)
 
-Select a verified alternative and click **Manual configuration instructions…**. The dialog displays the source repository file, a section-scoped example, a **Copy setting lines** button (without the section header), and **Verify effective settings**. MirrorPilot does not write to system configuration, run DNF changes, or request Polkit privileges. The user must back up the original file and edit the existing repository section manually. The example is **not a complete replacement file**.
+Select a verified alternative and click **Copy DNF5 configuration command…**. The dialog shows a command using `sudo dnf5 config-manager setopt`, a **Copy DNF5 command** button, and **Verify effective settings**. MirrorPilot does not execute commands, write DNF configuration, or request Polkit privileges. The user reviews and runs the command in their own terminal. DNF5 manages its own override file; do not manually edit distribution-provided .repo files as the default workflow.
 
-Check **Configuration origins…** first: DNF5 overrides may take precedence over the source file. Verification compares DNF5-reported effective baseurl, metalink and mirrorlist values, but is not a transactional guarantee and does not validate mirror health anew. Cross-release configuration suggestions remain blocked.
-
-Experimental transaction, identity, and TOCTOU tests remain in the repository as research only; they are not connected to the GUI and no privileged writer is planned.
+Check **Configuration origins…** first: other overrides may conflict. Verification compares DNF5-reported effective baseurl, metalink and mirrorlist, but is not a transactional guarantee. Cross-release suggestions remain blocked. Experimental transaction, identity, and TOCTOU tests remain research-only.
 
 ## Roadmap
 
