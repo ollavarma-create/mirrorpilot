@@ -10,7 +10,7 @@ if [[ ! -f "$ROOT/pyproject.toml" ]]; then
   exit 1
 fi
 
-echo "ROOT=$ROOT"   # debug, voi poistaa myöhemmin
+echo "ROOT=$ROOT"
 cd "$ROOT"
 
 if [[ "$(uname -m)" != "x86_64" ]]; then
@@ -50,34 +50,61 @@ fi
 echo "Using dist dir: $DIST_DIR"
 cp -a "$DIST_DIR/." "$APPDIR/usr/bin/"
 
-# Desktop + AppStream
-cp "$ROOT/packaging/io.github.ollavarma_create.MirrorPilot.desktop" \
-   "$APPDIR/io.github.ollavarma_create.MirrorPilot.desktop"
-cp "$ROOT/packaging/io.github.ollavarma_create.MirrorPilot.desktop" \
-   "$APPDIR/usr/share/applications/"
-cp "$ROOT/packaging/mirrorpilot.appdata.xml" \
-   "$APPDIR/usr/share/metainfo/io.github.ollavarma_create.MirrorPilot.appdata.xml"
+# --- Desktop (pakollinen) ---
+DESKTOP_SRC="$ROOT/packaging/io.github.ollavarma_create.MirrorPilot.desktop"
+if [[ -f "$DESKTOP_SRC" ]]; then
+  cp "$DESKTOP_SRC" "$APPDIR/mirrorpilot.desktop"
+else
+  cat > "$APPDIR/mirrorpilot.desktop" << 'EOF'
+[Desktop Entry]
+Type=Application
+Name=MirrorPilot
+Comment=Fedora DNF5 mirror diagnostics
+Exec=mirrorpilot
+Icon=mirrorpilot
+Terminal=false
+Categories=System;
+StartupNotify=true
+EOF
+fi
+cp "$APPDIR/mirrorpilot.desktop" "$APPDIR/usr/share/applications/"
 
-# Ikonit
-cp "$ROOT/assets/mirrorpilot.svg" "$APPDIR/mirrorpilot.svg"
-cp "$ROOT/assets/mirrorpilot.svg" "$APPDIR/usr/share/icons/hicolor/scalable/apps/mirrorpilot.svg"
-rsvg-convert -w 256 -h 256 -o "$APPDIR/mirrorpilot.png" "$ROOT/assets/mirrorpilot.svg"
+# --- AppStream (valinnainen) ---
+if [[ -f "$ROOT/packaging/mirrorpilot.appdata.xml" ]]; then
+  cp "$ROOT/packaging/mirrorpilot.appdata.xml" \
+     "$APPDIR/usr/share/metainfo/io.github.ollavarma_create.MirrorPilot.appdata.xml"
+fi
+
+# --- Ikonit ---
+if [[ -f "$ROOT/assets/mirrorpilot.svg" ]]; then
+  cp "$ROOT/assets/mirrorpilot.svg" "$APPDIR/mirrorpilot.svg"
+  cp "$ROOT/assets/mirrorpilot.svg" "$APPDIR/usr/share/icons/hicolor/scalable/apps/mirrorpilot.svg"
+  rsvg-convert -w 256 -h 256 -o "$APPDIR/mirrorpilot.png" "$ROOT/assets/mirrorpilot.svg"
+else
+  # yksinkertainen placeholder jos svg puuttuu
+  python -c "
+from pathlib import Path
+png = bytes.fromhex(
+  '89504e470d0a1a0a0000000d4948445200000001000000010802000000907753de'
+  '0000000c49444154789c63f80f00000101000518d84e0000000049454e44ae426082'
+)
+Path('$APPDIR/mirrorpilot.png').write_bytes(png)
+"
+fi
 cp "$APPDIR/mirrorpilot.png" "$APPDIR/usr/share/icons/hicolor/256x256/apps/mirrorpilot.png"
 
-# --- AppRun (kriittinen osa) ---
+# --- AppRun ---
 cat > "$APPDIR/AppRun" << 'EOF'
 #!/bin/sh
 HERE="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 BIN="$HERE/usr/bin"
 
-# Qt / Nuitka tarvitsee nämä kun binääri on siirretty AppDiriin
+# Nuitka laittaa pluginit polkuun PySide6/qt-plugins
 export LD_LIBRARY_PATH="$BIN:$BIN/PySide6/Qt/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-export QT_PLUGIN_PATH="$BIN/PySide6/Qt/plugins"
+export QT_PLUGIN_PATH="$BIN/PySide6/qt-plugins"
 
-# Älä käytä bundlattuja fontconfig-sääntöjä (hostin fontit riittävät)
 unset FONTCONFIG_FILE FONTCONFIG_PATH
 
-# Hostin CA-bundle (älä ylikirjoita jos käyttäjä on asettanut)
 if [ -z "${SSL_CERT_FILE+x}" ]; then
   for ca in \
     /etc/ssl/certs/ca-certificates.crt \
