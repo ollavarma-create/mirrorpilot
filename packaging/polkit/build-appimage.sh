@@ -17,10 +17,10 @@ python -m nuitka \
   --assume-yes-for-downloads \
   --enable-plugin=pyside6 \
   --include-qt-plugins=platforms,platformthemes,styles,imageformats,iconengines,xcbglintegrations \
-  --python-flag=-m \
+  --include-package=mirrorpilot \
   --output-dir="$ROOT/dist" \
   --output-filename=mirrorpilot \
-  mirrorpilot
+  "$ROOT/mirrorpilot/app.py"
 
 # --- AppDir ---
 APPDIR="$ROOT/dist/MirrorPilot.AppDir"
