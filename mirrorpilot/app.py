@@ -235,16 +235,16 @@ class MainWindow(QMainWindow):
         try:
             effective = read_effective_config(repo_id)
             diagnostic = format_effective_comparison(report, effective)
-            intro = "DNF5 effective values are shown first; file origins follow."
+            intro = "DNF5 effective settings and their file definitions (read-only)."
         except (RuntimeError, ValueError) as exc:
-            diagnostic = f"DNF5 effective configuration unavailable: {exc}"
+            diagnostic = (f"DNF5 effective configuration unavailable: {exc}"\n                          "\\n\\n" + format_config_report(report))
             intro = "File-level evidence only; DNF5 effective configuration unavailable."
         explanation = QLabel(intro)
         explanation.setWordWrap(True)
         content.addWidget(explanation)
         details = QTextEdit(dialog)
         details.setReadOnly(True)
-        details.setPlainText(diagnostic + "\n\n" + format_config_report(report))
+        details.setPlainText(diagnostic)
         details.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
         content.addWidget(details, 1)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, parent=dialog)
