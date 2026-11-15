@@ -10,7 +10,7 @@ def test_updates_template_and_command():
     template = "https://mirror.23m.com/fedora/linux/updates/$releasever/Everything/$basearch/"
     assert persistent_mirror_url("updates", url, "44") == template
     assert f"'updates.baseurl={template}'" in prepare_manual_edit(plan).snippet
-    assert verify_effective_values(plan, {"baseurl": template, "metalink": "", "mirrorlist": ""})[0]
+    assert verify_effective_values(plan, {"baseurl": template, "metalink": "", "mirrorlist": ""}, raw_baseurl=template)[0]
     assert not verify_effective_values(plan, {"baseurl": url, "metalink": "", "mirrorlist": ""})[0]
 
 
