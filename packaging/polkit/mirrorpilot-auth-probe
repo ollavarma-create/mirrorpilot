@@ -1,0 +1,29 @@
+#!/usr/bin/python3
+"""Minimal privileged authorization probe: no filesystem writes.
+
+Install root-owned at /usr/libexec/mirrorpilot-auth-probe with mode 0755.
+No user-controlled path, shell invocation, or DNF operations are accepted.
+"""
+import json
+import os
+import sys
+
+
+def main() -> int:
+    if len(sys.argv) != 1:
+        print("No arguments accepted", file=sys.stderr)
+        return 2
+    if os.geteuid() != 0:
+        print("Not running as root", file=sys.stderr)
+        return 3
+    print(json.dumps({
+        "protocol": "mirrorpilot-auth-probe-v1",
+        "authorized": True,
+        "effective_uid": os.geteuid(),
+        "writes": False,
+    }))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
