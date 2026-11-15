@@ -173,3 +173,21 @@ Run `python -m pytest -q tests/test_config_conflicts.py`. Next: compare these ob
 The **Configuration origins…** dialog also queries `dnf5 --dump-repo-config=<repo-id>` and shows the effective settings beside file-level definitions. This avoids requiring usable repository metadata or network access. The query uses a validated repository ID, a shell-free subprocess, and an 8-second timeout. If DNF5 cannot provide values, the dialog still shows the file evidence and an explicit error.
 
 Effective values confirm what DNF5 resolves, **not** which particular file supplied each value. Do not interpret differing file definitions as proven errors or use this display to authorize privileged changes. Run `python -m pytest -q tests/test_dnf_effective.py`.
+
+## Future privileged writer boundary (not enabled)
+
+The GUI now previews a strictly limited request for either `fedora` or
+`updates`: a single HTTPS base URL and clearing the corresponding metalink.
+`mirrorpilot/write_policy.py` validates request shape and rejects arbitrary
+DNF options, shell commands, paths, non-HTTPS URLs, credentials, and unsafe
+characters. This is **request-shape validation**, not a guarantee that the
+mirror is trusted: the existing metadata checks and release checks remain
+mandatory. Country-domain suffix checks are not a security trust anchor.
+
+**There is no privileged writer in this change.** The GUI stays read-only,
+and the existing Polkit authorization probe remains read-only. Before adding
+a privileged helper we must design a fixed-operation IPC protocol, validate
+requests again on the privileged side, use trusted executable paths, prevent
+symlink/path races, serialize writes against other DNF configuration changes,
+preserve file metadata, and prove durable recovery. Never pass GUI-generated
+shell commands or filesystem paths to a root helper.
