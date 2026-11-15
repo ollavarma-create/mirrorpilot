@@ -159,3 +159,11 @@ Run `python -m pytest -q tests/test_polkit_probe.py` for parser tests. This is a
 `mirrorpilot/apply_protocol.py` defines a size-limited JSON request with an exact field allowlist: protocol, operation (`preview` only), repository (`fedora` or `updates`), release and concrete HTTPS mirror URL. Arbitrary target paths, unknown fields and `apply` operations are rejected. A separate release check requires equality with the installed Fedora release. This is **not** a privileged writer, and no new authorization or GUI Apply path has been enabled.
 
 Run `python -m pytest -q tests/test_apply_protocol.py`. Before a production helper can write anything, it must recheck all inputs and DNF5's effective configuration under root, securely bind the verified mirror to the requested repository, and implement root-owned backup/rollback and crash recovery.
+
+### Configuration origins (read-only)
+
+Use **Configuration origins…** in the main window to inspect where the selected repository's `enabled`, `baseurl`, `metalink`, `mirrorlist`, and `proxy` values appear in `/etc/yum.repos.d/*.repo` and `/etc/dnf/repos.override.d/*.repo`. Select a configured repository row first; otherwise the repository dropdown is used. Click **Show Details** in the resulting dialog to view paths, values, and notes.
+
+Repeated identical values are distinguished from differing definitions. A differing definition is **not automatically an error**: it can be an intentional override. This conservative file-level inspection does **not** establish DNF5's actual effective precedence, handle every DNF5 configuration source, or authorize writes. Malformed files and uncertain source combinations are reported rather than silently repaired.
+
+Run `python -m pytest -q tests/test_config_conflicts.py`. Next: compare these observations with libdnf5's authoritative effective configuration and add explicit uncertainty reporting before enabling any Apply operation.
