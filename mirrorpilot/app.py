@@ -65,8 +65,8 @@ class MainWindow(QMainWindow):
         self.speed_button = QPushButton('Benchmark approved mirrors (up to 8; read-only)')
         self.speed_button.clicked.connect(self.test_speeds)
         layout.addWidget(self.speed_button)
-        self.speed_table = QTableWidget(0, 5)
-        self.speed_table.setHorizontalHeaderLabels(['Country', 'Mirror URL', 'Median Mbit/s', 'Median TTFB ms', 'Status'])
+        self.speed_table = QTableWidget(0, 6)
+        self.speed_table.setHorizontalHeaderLabels(['Country', 'Mirror URL', 'Median Mbit/s', 'Range Mbit/s', 'Median TTFB ms', 'Status'])
         self.speed_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.speed_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.speed_table.setMinimumHeight(150)
@@ -154,7 +154,9 @@ class MainWindow(QMainWindow):
             return
         self.speed_table.setRowCount(len(results))
         for i, result in enumerate(results):
-            values = (result.country, result.url, str(result.mbps or '-'), str(result.ttfb_ms or '-'), result.status)
+            values = (result.country, result.url, str(result.mbps) if result.mbps is not None else '-',
+                      '{}–{}'.format(result.min_mbps, result.max_mbps) if result.min_mbps is not None else '-',
+                      str(result.ttfb_ms) if result.ttfb_ms is not None else '-', result.status)
             for col, value in enumerate(values):
                 self.speed_table.setItem(i, col, QTableWidgetItem(value))
         self.details.setPlainText('Three bounded samples per mirror; median shown. Country is MirrorManager registration, not verified location. Integrity/freshness not checked.')
