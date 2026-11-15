@@ -10,7 +10,7 @@ VERSION="$(python -c 'import importlib.metadata; print(importlib.metadata.versio
 mkdir -p dist
 # Nuitka standalone build with explicit PySide6 plugin.
 python -m nuitka --standalone --assume-yes-for-downloads \
-  --enable-plugin=pyside6 --include-package=mirrorpilot \
+  --enable-plugin=pyside6 \
   --python-flag=-m --output-dir="$ROOT/dist" --output-filename=mirrorpilot \
   mirrorpilot
 APPDIR="$ROOT/dist/MirrorPilot.AppDir"
