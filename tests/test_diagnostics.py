@@ -69,3 +69,11 @@ def test_unknown_repo_rejected():
     import pytest
     with pytest.raises(ValueError):
         d.run_diagnostics("45", repo="nonexistent")
+
+def test_gui_worker_positional_args_with_keyword_progress(monkeypatch):
+    """Worker passes release, metadata count, repo positionally and progress by keyword."""
+    monkeypatch.setattr(d, "benchmark", lambda release, repo, progress: [])
+    events = []
+    result = d.run_diagnostics("45", 1, "updates", progress=lambda *args: events.append(args))
+    assert result == []
+    assert events == []
