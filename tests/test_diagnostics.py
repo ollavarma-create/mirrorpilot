@@ -25,8 +25,8 @@ def test_recommendation_requires_verification():
 
 def test_pipeline_only_streams_fastest_matching_mirror(monkeypatch):
     speeds = [speed("https://fast/", 200), speed("https://slow/", 100)]
-    monkeypatch.setattr(d, "benchmark", lambda release, progress: speeds)
-    monkeypatch.setattr(d, "audit", lambda base, country, release: check("index-match"))
+    monkeypatch.setattr(d, "benchmark", lambda release, repo, progress: speeds)
+    monkeypatch.setattr(d, "audit", lambda base, country, release, repo: check("index-match"))
     calls = []
     def metadata(base, country, release, progress):
         calls.append(base)
@@ -39,7 +39,7 @@ def test_pipeline_only_streams_fastest_matching_mirror(monkeypatch):
     assert any(event[0] == "index" for event in events)
 
 def test_bad_index_never_gets_recommended(monkeypatch):
-    monkeypatch.setattr(d, "benchmark", lambda release, progress: [speed("https://bad/", 300)])
+    monkeypatch.setattr(d, "benchmark", lambda release, repo, progress: [speed("https://bad/", 300)])
     monkeypatch.setattr(d, "audit", lambda *args: check("different"))
     monkeypatch.setattr(d, "audit_referenced", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("must not fetch")))
     rows = d.run_diagnostics("45")
@@ -50,3 +50,22 @@ def test_metadata_count_bounds():
     import pytest
     with pytest.raises(ValueError):
         d.run_diagnostics("45", metadata_count=9)
+
+def test_updates_repo_passed_to_benchmark_and_audit(monkeypatch):
+    called = []
+    def fake_benchmark(release, repo, progress):
+        called.append(("benchmark", release, repo))
+        return [speed("https://updates.example/", 200)]
+    def fake_audit(base, country, release, repo):
+        called.append(("audit", release, repo))
+        return check("different")
+    monkeypatch.setattr(d, "benchmark", fake_benchmark)
+    monkeypatch.setattr(d, "audit", fake_audit)
+    rows = d.run_diagnostics("45", repo="updates")
+    assert rows[0].health == "problem"
+    assert called == [("benchmark", "45", "updates"), ("audit", "45", "updates")]
+
+def test_unknown_repo_rejected():
+    import pytest
+    with pytest.raises(ValueError):
+        d.run_diagnostics("45", repo="nonexistent")
