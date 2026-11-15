@@ -12,7 +12,7 @@ python -m PyInstaller --noconfirm --clean --onedir \
   --name mirrorpilot --collect-all PySide6 --hidden-import mirrorpilot.tls_diagnostics \
   mirrorpilot/__main__.py
 APPDIR="$ROOT/dist/MirrorPilot.AppDir"
-mkdir -p "$APPDIR/usr/bin" "$APPDIR/usr/share/icons/hicolor/scalable/apps"
+mkdir -p "$APPDIR/usr/bin" "$APPDIR/usr/share/icons/hicolor/scalable/apps" "$APPDIR/usr/share/applications"
 cp -a "$ROOT/dist/mirrorpilot/." "$APPDIR/usr/bin/"
 cp "$ROOT/packaging/io.github.ollavarma_create.MirrorPilot.desktop" "$APPDIR/io.github.ollavarma_create.MirrorPilot.desktop"
 cp "$ROOT/packaging/io.github.ollavarma_create.MirrorPilot.desktop" "$APPDIR/usr/share/applications/io.github.ollavarma_create.MirrorPilot.desktop"
