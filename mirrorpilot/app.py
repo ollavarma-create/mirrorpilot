@@ -307,6 +307,12 @@ class MainWindow(QMainWindow):
         self.mirrors.setRowCount(0)
         self.scan_repo = self.repo_choice.currentData()
         self.scan_release = self.version.currentData() or _version()
+        # Reload file-level configuration before each scan: the user may have
+        # executed a DNF5 config-manager command since opening this window.
+        try:
+            self.repos = get_repositories(self.scan_release)
+        except (OSError, RuntimeError, ValueError) as exc:
+            self.statusBar().showMessage(f"Could not refresh repository settings: {exc}")
         configured = next((r for r in self.repos
                            if r.repo_id == self.scan_repo and r.status == "enabled"), None)
         self.configured_url = configured.baseurl.strip() if configured and configured.baseurl.strip().startswith("https://") else None
@@ -349,7 +355,8 @@ class MainWindow(QMainWindow):
         self.summary.setWordWrap(True)
         current = (self.current_result if self.current_result_key == self.scan_key else None)
         self.summary.setText("\n".join(summary_lines(
-            self.results, self.scan_release, self.scan_repo, current=current)))
+            self.results, self.scan_release, self.scan_repo, current=current,
+            configured_url=self.configured_url)))
         for i, row in enumerate(self.results):
             speed = row.speed
             label = {"verified": "Verified", "problem": "Problem", "error": "Error",
@@ -412,7 +419,14 @@ class MainWindow(QMainWindow):
         entry = self.results[row]
         if entry.health != "verified" or entry.speed.country == "Configured":
             return
-        configured = next((r for r in self.repos
+        # Refresh the source before comparing: settings may have changed
+        # while diagnostics were running.
+        try:
+            latest_repos = get_repositories(self.scan_release)
+        except (OSError, RuntimeError, ValueError) as exc:
+            QMessageBox.warning(self, "Preview unavailable", f"Cannot refresh repository settings: {exc}")
+            return
+        configured = next((r for r in latest_repos
                            if r.repo_id == self.scan_repo and r.status == "enabled"), None)
         if configured is None:
             QMessageBox.warning(self, "Preview unavailable", "No enabled configured repository found.")
