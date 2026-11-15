@@ -280,6 +280,7 @@ class MainWindow(QMainWindow):
         elif phase == "bytes":
             self.progress_text = "Verifying " + detail
         self.animate()
+        self.statusBar().showMessage(self.progress_text)
 
     def start_current_check(self):
         self.start_scan(current_only=True)
@@ -302,6 +303,7 @@ class MainWindow(QMainWindow):
         self.timer.start()
         self.animate()
         self.summary.setText("Running read-only diagnostics…")
+        self.statusBar().showMessage(self.progress_text)
         self.details.clear()
         self.results = []
         self.mirrors.setRowCount(0)
