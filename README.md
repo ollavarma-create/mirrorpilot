@@ -114,3 +114,9 @@ The proposed `/etc/dnf/repos.override.d/99_mirrorpilot.repo` is a *design target
 The selected **Diagnose release** is for read-only investigation, not permission to change the installed Fedora release. A configuration change plan is allowed only when the diagnostic release is a known numeric release **equal to the installed Fedora release**. Otherwise the GUI displays a diagnostic-only warning instead of a DNF override proposal. This rule is also enforced in `changes.build_change_plan()`, with automated mismatch/unknown-version tests.
 
 For example, Fedora 44 users may benchmark Fedora 45 mirrors, but cannot use MirrorPilot to configure those Fedora 45 mirrors as active Fedora 44 repositories. System upgrades must use Fedora's official upgrade procedure. The future privileged helper must **independently re-read the installed release and validate the repository target**, and must not rely on the GUI or this unprivileged preview for authorization.
+
+### Experimental transaction tests (sandbox only)
+
+`mirrorpilot/sandbox_transaction.py` is a **non-privileged, test-only prototype**. It models a before-image snapshot, temporary-file replacement, verification and rollback, including restoring the absence of a file. Tests use pytest's temporary directories; **the GUI does not call this code**, and it cannot be pointed at `/etc`.
+
+Run `python -m pytest -q tests/test_sandbox_transaction.py` to check rollback scenarios. This prototype is **not suitable for privileged execution**: it has filesystem race windows, holds backups in memory, and does not preserve ownership, ACLs, SELinux labels or durable backup history. The eventual Polkit helper will need root-owned durable snapshots, fd-relative/no-follow path handling, secure atomic commits with directory fsync, independent release checks, DNF5 precedence validation and recovery tests before any real system write is enabled.
