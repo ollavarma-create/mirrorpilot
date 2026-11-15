@@ -103,3 +103,25 @@ def test_metadata_timeout_keeps_index_results(monkeypatch):
     assert rows[0].index.status == "index-match"
     assert rows[0].metadata.status == "error"
     assert rows[0].health == "uncertain"
+
+def test_configured_source_checked_even_if_index_differs(monkeypatch):
+    monkeypatch.setattr(d, "probe", lambda base, country: speed(base, 70))
+    monkeypatch.setattr(d, "benchmark", lambda release, repo, progress: [speed("https://alternative/", 200)])
+    monkeypatch.setattr(d, "audit", lambda base, country, release, repo:
+                        check("different") if country == "Configured" else check("index-match"))
+    checked = []
+    def metadata(base, country, release, progress):
+        checked.append((base, country))
+        return check("metadata-match")
+    monkeypatch.setattr(d, "audit_referenced", metadata)
+    rows = d.run_diagnostics("45", 1, "updates", "https://funet.example/updates/45/")
+    assert rows[0].speed.country == "Configured"
+    assert rows[0].health == "problem"
+    assert checked[0][1] == "Configured"
+    assert rows[1].health == "verified"
+
+def test_configured_url_requires_https_before_network(monkeypatch):
+    import pytest
+    monkeypatch.setattr(d, "benchmark", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("network")))
+    with pytest.raises(ValueError):
+        d.run_diagnostics("45", 1, "updates", "http://example.org/repo/")
