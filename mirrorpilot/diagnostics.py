@@ -1,9 +1,21 @@
 """Read-only unified diagnostics with explicit verification scope."""
 from dataclasses import dataclass
+from urllib.error import HTTPError, URLError
+import socket
 from mirrorpilot.speed import benchmark, MirrorResult
 from mirrorpilot.audit import audit, audit_referenced, AuditResult
 
 BAD = {"different", "missing", "checksum-mismatch"}
+
+
+def _index_safely(speed, release, repo):
+    try:
+        return audit(speed.url, speed.country, release, repo=repo)
+    except (TimeoutError, socket.timeout, URLError, OSError) as exc:
+        return AuditResult("timeout", f"Index request timed out or failed: {exc}", speed.url)
+    except Exception as exc:
+        return AuditResult("error", f"Index check failed: {exc}", speed.url)
+
 GOOD = {"index-match", "metadata-match"}
 
 @dataclass(frozen=True)
@@ -45,7 +57,7 @@ def run_diagnostics(release: str, metadata_count: int = 1, repo: str = "fedora",
     speeds = benchmark(release, repo=repo, progress=lambda done, total: emit("benchmark", done, total))
     rows = []
     for i, speed in enumerate(speeds, 1):
-        index = audit(speed.url, speed.country, release, repo=repo) if speed.status == "measured" else None
+        index = _index_safely(speed, release, repo) if speed.status == "measured" else None
         rows.append(MirrorHealth(speed, index))
         emit("index", i, len(speeds), speed.country)
     # Verify fastest mirrors whose indexes match. Other rows remain unchecked.
@@ -54,9 +66,12 @@ def run_diagnostics(release: str, metadata_count: int = 1, repo: str = "fedora",
     for done, i in enumerate(candidates[:metadata_count], 1):
         row = rows[i]
         emit("metadata", done - 1, min(metadata_count, len(candidates)), row.speed.country)
-        metadata = audit_referenced(row.speed.url, row.speed.country, release,
-                                    progress=lambda kind, n, total, bytes_done, size:
-                                    emit("bytes", n, total, f"{kind}: {bytes_done}/{size} bytes"))
+        try:
+            metadata = audit_referenced(row.speed.url, row.speed.country, release,
+                                        progress=lambda kind, n, total, bytes_done, size:
+                                        emit("bytes", n, total, f"{kind}: {bytes_done}/{size} bytes"))
+        except Exception as exc:
+            metadata = AuditResult("error", f"Metadata check interrupted: {exc}", row.speed.url)
         rows[i] = MirrorHealth(row.speed, row.index, metadata)
         emit("metadata", done, min(metadata_count, len(candidates)), row.speed.country)
     return rows
