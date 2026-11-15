@@ -63,3 +63,20 @@ def test_comparison_labels_effective_value():
     rendered = format_effective_comparison(ConfigReport("updates", (), ()), result)
     assert "authoritative values" in rendered
     assert "metalink = ''" in rendered
+
+
+def test_consolidated_report_does_not_repeat_origins_or_stale_disclaimer():
+    from mirrorpilot.config_conflicts import SettingFinding, SettingOrigin
+    report = ConfigReport(
+        "updates",
+        (SettingFinding("metalink", (
+            SettingOrigin("/etc/yum.repos.d/fedora-updates.repo", "https://example.org/metalink", "repository file"),
+            SettingOrigin("/etc/dnf/repos.override.d/99-config_manager.repo", "", "override fragment"),
+        ), "different definitions — precedence unconfirmed"),),
+        ("This view shows file-level evidence, not libdnf5's authoritative effective values. No automatic repair or Apply is permitted based on this report.",),
+    )
+    rendered = format_effective_comparison(report, parse_dump("updates", SAMPLE))
+    assert rendered.count("/etc/yum.repos.d/fedora-updates.repo") == 1
+    assert "effective values were never checked" not in rendered
+    assert "This view shows file-level evidence" not in rendered
+    assert "Configuration validity does not establish mirror availability" in rendered
