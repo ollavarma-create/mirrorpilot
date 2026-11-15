@@ -1,11 +1,35 @@
 """Read-only unified diagnostics with explicit verification scope."""
 from dataclasses import dataclass
 from urllib.error import HTTPError, URLError
+from urllib.parse import urljoin
 import socket
 from mirrorpilot.speed import benchmark, MirrorResult, probe, _base_from_metalink
 from mirrorpilot.audit import audit, audit_referenced, AuditResult
 
 BAD = {"different", "missing", "checksum-mismatch"}
+
+
+def explain_source(row):
+    """Plain-language result with scope and next action, without overstating integrity."""
+    if row is None:
+        return "Current repository could not be identified; no current-source check was performed."
+    if row.speed.status != "measured":
+        detail = row.speed.detail
+        if "HTTP Error 404" in detail or "HTTP 404" in detail:
+            return ("Current repository unavailable: HTTP 404 while retrieving metadata "
+                    f"({urljoin(row.speed.url, 'repodata/repomd.xml')} or a referenced metadata file). "
+                    "A working alternative may be needed; no settings changed.")
+        if "timed out" in detail.lower():
+            return "Current repository did not respond in time; retry before changing settings."
+        return f"Current repository check failed: {detail}. No changes made."
+    if row.index and row.index.status == "different":
+        return "Current repository index differs from Fedora's reference; it may be synchronizing."
+    if row.metadata and row.metadata.status == "missing":
+        return f"Current repository references missing metadata: {row.metadata.message}"
+    if row.health == "verified":
+        return "Current repository: checked metadata OK; no integrity-related change indicated."
+    return f"Current repository: {row.health}; inspect details before changing settings."
+
 
 
 def _index_safely(speed, release, repo):
