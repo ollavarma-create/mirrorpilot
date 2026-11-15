@@ -46,8 +46,27 @@ class SandboxDNFTransaction:
         if not self.journal.exists():
             return None
         doc = json.loads(self.journal.read_text(encoding="utf-8"))
+        if type(doc) is not dict:
+            raise RuntimeError("Invalid transaction journal")
         if doc.get("version") != 1 or doc.get("state") not in ("PREPARED", "APPLIED", "VERIFIED"):
             raise RuntimeError("Invalid transaction journal")
+        try:
+            before_hex = doc["before_hex"]
+            before = bytes.fromhex(before_hex) if type(before_hex) is str else None
+            if before_hex is not None and type(before_hex) is not str:
+                raise ValueError("Invalid before image")
+            if digest(before) != doc["before_sha256"]:
+                raise ValueError("Snapshot hash mismatch")
+            mode = doc["before_mode"]
+            if before is not None and (type(mode) is not int or not 0 <= mode <= 0o777):
+                raise ValueError("Invalid snapshot mode")
+            for field in ("after_sha256", "expected_sha256"):
+                value = doc.get(field)
+                if value is not None and (type(value) is not str or len(value) != 64
+                        or any(ch not in "0123456789abcdef" for ch in value)):
+                    raise ValueError("Invalid digest")
+        except (KeyError, TypeError, ValueError) as exc:
+            raise RuntimeError("Invalid transaction journal integrity") from exc
         return doc
 
     def _save(self, doc: dict) -> None:
