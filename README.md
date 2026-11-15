@@ -36,17 +36,25 @@ python -m pip install -e '.[test]'
 pytest -q
 ```
 
+## Manual configuration workflow (current)
+
+Select a verified alternative and click **Manual configuration instructions…**. The dialog displays the source repository file, a section-scoped example, a **Copy setting lines** button (without the section header), and **Verify effective settings**. MirrorPilot does not write to system configuration, run DNF changes, or request Polkit privileges. The user must back up the original file and edit the existing repository section manually. The example is **not a complete replacement file**.
+
+Check **Configuration origins…** first: DNF5 overrides may take precedence over the source file. Verification compares DNF5-reported effective baseurl, metalink and mirrorlist values, but is not a transactional guarantee and does not validate mirror health anew. Cross-release configuration suggestions remain blocked.
+
+Experimental transaction, identity, and TOCTOU tests remain in the repository as research only; they are not connected to the GUI and no privileged writer is planned.
+
 ## Roadmap
 
 1. Read-only DNF5 discovery and metadata diagnostics
 2. Robust effective DNF5 configuration and variable expansion
 3. Mirror discovery, validation, freshness and speed comparison
-4. Explicitly authorized settings changes with previews and rollback
+4. Read-only, copyable manual configuration guidance and effective-settings verification
 5. Release-upgrade preflight and distribution-specific adapters
 
 ## Safety
 
-MirrorPilot must not silently change DNF configuration or update installed software. Future writes must use documented DNF5 configuration interfaces, explicit authorization, validation and rollback. Geographic origin cannot be guaranteed by IP geolocation alone.
+MirrorPilot must not silently change DNF configuration or update installed software. MirrorPilot never writes DNF settings or requests elevated privileges. Users edit configuration themselves and may verify effective settings afterward. Geographic origin cannot be guaranteed by IP geolocation alone.
 
 ## License
 
