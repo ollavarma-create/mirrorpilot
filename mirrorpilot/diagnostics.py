@@ -29,21 +29,23 @@ def fastest_verified(rows):
     eligible = [r for r in rows if r.health == "verified" and r.speed.mbps is not None]
     return max(eligible, key=lambda r: r.speed.mbps) if eligible else None
 
-def run_diagnostics(release: str, progress=None, metadata_count: int = 1):
+def run_diagnostics(release: str, progress=None, metadata_count: int = 1, repo: str = "fedora"):
     """Benchmark eight, compare all indexes, stream metadata for fastest N.
 
     Default N=1 intentionally avoids downloading up to 12 GiB without
     explicit user approval. No verified recommendation until both checks pass.
     """
+    if repo not in ("fedora", "updates"):
+        raise ValueError("Unsupported repository")
     if not 0 <= metadata_count <= 8:
         raise ValueError("metadata_count must be between 0 and 8")
     def emit(phase, done, total, detail=""):
         if progress:
             progress(phase, done, total, detail)
-    speeds = benchmark(release, progress=lambda done, total: emit("benchmark", done, total))
+    speeds = benchmark(release, repo=repo, progress=lambda done, total: emit("benchmark", done, total))
     rows = []
     for i, speed in enumerate(speeds, 1):
-        index = audit(speed.url, speed.country, release) if speed.status == "measured" else None
+        index = audit(speed.url, speed.country, release, repo=repo) if speed.status == "measured" else None
         rows.append(MirrorHealth(speed, index))
         emit("index", i, len(speeds), speed.country)
     # Verify fastest mirrors whose indexes match. Other rows remain unchecked.
