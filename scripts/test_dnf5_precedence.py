@@ -64,6 +64,29 @@ def _run(root: Path, label: str, *, override_a: str | None = None,
     for line in result.stdout.splitlines():
         if line.startswith(("baseurl =", "metalink =", "mirrorlist =", "enabled =")):
             print(line)
+    main_args = args[:-1] + ["--dump-main-config"]
+    main_result = subprocess.run(
+        main_args, cwd=root, env=env, capture_output=True, text=True,
+        timeout=15, check=False,
+    )
+    main_values = dict(
+        line.split(" = ", 1) for line in main_result.stdout.splitlines()
+        if " = " in line
+    )
+    if label == "base only":
+        print("DNF5 main config diagnostics:")
+        print("  expected config file:", config)
+        print("  config_file_path:", main_values.get("config_file_path", "<missing>"))
+        print("  reposdir:", main_values.get("reposdir", "<missing>"))
+        print("  fastestmirror:", main_values.get("fastestmirror", "<missing>"))
+        print("  ip_resolve:", main_values.get("ip_resolve", "<missing>"))
+        if main_result.returncode:
+            print("  main config stderr:", repr(main_result.stderr[:1000]))
+    if (main_result.returncode or
+        main_values.get("fastestmirror") != "0" or
+        main_values.get("ip_resolve") != "whatever"):
+        print("INCONCLUSIVE: isolated main configuration was not verified.")
+        return 3, result.stdout, result.stderr
     if found and ("fastestmirror = 0" not in result.stdout or
                   "ip_resolve = whatever" not in result.stdout):
         print("INCONCLUSIVE: DNF5 did not load the isolated main config markers.")
