@@ -9,7 +9,8 @@ from PySide6.QtWidgets import (
     QTextEdit, QVBoxLayout, QWidget,
 )
 from mirrorpilot.check import check_baseurl
-from mirrorpilot.repos import get_repositories
+from mirrorpilot.repos import get_repositories, _version
+from mirrorpilot.speed import benchmark
 
 
 class Worker(QObject):
@@ -61,6 +62,9 @@ class MainWindow(QMainWindow):
         self.check_button.setEnabled(False)
         self.check_button.clicked.connect(self.check_selected)
         layout.addWidget(self.check_button)
+        self.speed_button = QPushButton('Test Fedora mirror speeds (FI SE EE DE NL DK, max 8)')
+        self.speed_button.clicked.connect(self.test_speeds)
+        layout.addWidget(self.speed_button)
         self.details = QTextEdit()
         self.details.setReadOnly(True)
         self.details.setMaximumHeight(125)
@@ -127,6 +131,26 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("Testing repository metadata...")
         self.run_job(check_baseurl, (self.repos[index].baseurl,), self.checked)
 
+    def test_speeds(self):
+        self.speed_button.setEnabled(False)
+        self.statusBar().showMessage('Testing up to 8 Fedora mirrors...')
+        self.details.setPlainText('Country-filtered mirror speed test running...')
+        self.run_job(benchmark, (self.version.text().strip() or _version(),), self.speeds_finished)
+
+    def speeds_finished(self, results, error):
+        self.speed_button.setEnabled(True)
+        if error:
+            self.details.setPlainText('Mirror speed test failed: ' + error)
+            self.statusBar().showMessage('Speed test failed')
+            return
+        if not results:
+            self.details.setPlainText('No HTTPS mirrors returned for selected countries.')
+            return
+        lines = []
+        for result in results:
+            lines.append('{}: {} Mbit/s, {} ms | {} | {}'.format(result.status, result.mbps, result.milliseconds, result.url, result.message))
+        self.details.setPlainText('\n'.join(lines))
+        self.statusBar().showMessage('Tested {} mirrors (indicative speeds)'.format(len(results)))
     def checked(self, diagnostic, error):
         self.selection_changed()
         if error:
