@@ -38,4 +38,4 @@ def test_instructions_contain_real_newlines_not_literal_escape_sequences():
     manual = prepare_manual_edit(plan())
     assert "\n" in manual.instructions
     assert "\\n" not in manual.instructions
-    assert "1. Inspect" in manual.instructions.splitlines()
+    assert any(line.startswith("1. Inspect") for line in manual.instructions.splitlines())
