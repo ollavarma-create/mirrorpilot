@@ -454,8 +454,8 @@ class MainWindow(QMainWindow):
         try:
             approved = validate_request(plan.repo_id, entry.speed.url)
             options = preview_options(approved)
-            policy_text = ("Future helper request: VALIDATED (preview only)\\n"
-                           + "\\n".join(options))
+            policy_text = ("Future helper request: VALIDATED (preview only)\n"
+                           + "\n".join(options))
         except ValueError as exc:
             policy_text = "Future helper request: BLOCKED — " + str(exc)
         dialog = QMessageBox(self)
