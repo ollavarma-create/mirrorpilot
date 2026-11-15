@@ -2,13 +2,13 @@ import pytest
 from mirrorpilot.changes import build_change_plan, format_change_plan, validate_mirror_url, release_change_allowed
 
 
-def test_preview_is_pure_and_shows_override(tmp_path):
+def test_preview_is_pure_and_shows_config_manager(tmp_path):
     source = "/etc/yum.repos.d/fedora.repo"
     plan = build_change_plan("updates", "https://old.example.org/updates/45/",
                              "https://new.example.org/updates/45/", source, target_release="45", installed_release="45")
-    assert plan.target_file == "/etc/dnf/repos.override.d/99_mirrorpilot.repo"
-    assert "[updates]\nbaseurl=https://new.example.org/updates/45/\n" in plan.preview
-    assert "metalink=\nmirrorlist=\n" in plan.preview
+    assert plan.target_file == "/etc/dnf/repos.override.d/99-config_manager.repo"
+    assert "dnf5 config-manager setopt updates.baseurl=https://new.example.org/updates/45/" in plan.preview
+    assert "updates.metalink= updates.mirrorlist=" in plan.preview
     assert "PREVIEW ONLY" in format_change_plan(plan)
     assert not list(tmp_path.iterdir())
 
@@ -58,3 +58,16 @@ def test_cross_release_change_plan_is_blocked():
             "/etc/yum.repos.d/fedora-updates.repo",
             target_release="45", installed_release="44"
         )
+
+
+def test_preview_does_not_propose_competing_fragment():
+    plan = build_change_plan(
+        "fedora", "https://old.example.org/fedora/44/",
+        "https://new.example.org/fedora/44/",
+        "/etc/yum.repos.d/fedora.repo", target_release="44", installed_release="44",
+    )
+    output = format_change_plan(plan)
+    assert "99_mirrorpilot.repo" not in output
+    assert "DNF5-managed override" in output
+    assert "config-manager setopt" in output
+    assert "PREVIEW ONLY" in output
