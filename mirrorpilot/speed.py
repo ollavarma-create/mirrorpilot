@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from html.parser import HTMLParser
 from statistics import median
 from time import perf_counter
+import socket
 from urllib.parse import urlencode, urlsplit, urljoin
 from urllib.request import Request, build_opener
 from urllib.error import HTTPError, URLError
@@ -97,15 +98,22 @@ def parse_inventory(html: bytes) -> dict[str, str]:
 
 
 def _download(url: str, limit: int) -> bytes:
-    with build_opener(SafeRedirectHandler()).open(
-        Request(url, headers={"User-Agent": "MirrorPilot/0.2"}), timeout=TIMEOUT
-    ) as response:
-        if response.status != 200:
-            raise ValueError(f"Unexpected HTTP {response.status}")
-        payload = response.read(limit + 1)
-        if len(payload) > limit:
-            raise ValueError("Registry or metalink response exceeds size limit")
-        return payload
+    """Bounded GET, with one retry only for transient network failures."""
+    for attempt in range(2):
+        try:
+            with build_opener(SafeRedirectHandler()).open(
+                Request(url, headers={"User-Agent": "MirrorPilot/0.2"}), timeout=TIMEOUT
+            ) as response:
+                if response.status != 200:
+                    raise ValueError(f"Unexpected HTTP {response.status}")
+                payload = response.read(limit + 1)
+                if len(payload) > limit:
+                    raise ValueError("Registry or metalink response exceeds size limit")
+                return payload
+        except (TimeoutError, socket.timeout, URLError, ConnectionError) as exc:
+            if attempt:
+                raise TimeoutError(f"Request failed after retry ({urlsplit(url).hostname}): {exc}") from exc
+    raise RuntimeError("Unreachable retry state")
 
 
 def _base_from_metalink(url: str) -> str | None:
@@ -135,9 +143,15 @@ def discover(release: str, repo: str = "fedora") -> list[tuple[str, str]]:
         raise ValueError("Unsupported repository")
     name = f"fedora-{release}" if repo == "fedora" else f"updates-released-f{release}"
     query = urlencode({"repo": name, "arch": "x86_64", "country": ",".join(COUNTRIES)})
-    metalink = _download("https://mirrors.fedoraproject.org/metalink?" + query, MAX_LIST)
+    try:
+        metalink = _download("https://mirrors.fedoraproject.org/metalink?" + query, MAX_LIST)
+    except TimeoutError as exc:
+        raise RuntimeError(f"Fedora metalink discovery timed out: {exc}") from exc
     # Registry is authoritative for registered country; no hostname heuristics.
-    registry = parse_inventory(_download(REGISTRY_URL, MAX_REGISTRY))
+    try:
+        registry = parse_inventory(_download(REGISTRY_URL, MAX_REGISTRY))
+    except TimeoutError as exc:
+        raise RuntimeError(f"MirrorManager country registry timed out: {exc}") from exc
     buckets = {country: [] for country in COUNTRIES}
     for base in parse_metalink(metalink):
         host = urlsplit(base).hostname or ""
