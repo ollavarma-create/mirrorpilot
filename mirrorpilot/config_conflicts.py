@@ -40,12 +40,14 @@ def inspect_configuration(repo_id: str, repo_dir: Path | None = None,
                           override_dir: Path | None = None) -> ConfigReport:
     if not isinstance(repo_id, str) or not repo_id or any(ch in repo_id for ch in "[]\n\r"):
         raise ValueError("Invalid repository ID")
-    base = repos.REPO_DIR if repo_dir is None else Path(repo_dir)
+    bases = repos.repository_directories() if repo_dir is None else (Path(repo_dir),)
     overrides = repos.OVERRIDE_DIR if override_dir is None else Path(override_dir)
     observed: dict[str, list[SettingOrigin]] = {key: [] for key in KEYS}
     warnings: list[str] = []
     found = False
-    for layer, directory in (("repository file", base), ("override fragment", overrides)):
+    layers = [("repository file", directory) for directory in bases]
+    layers.append(("override fragment", overrides))
+    for layer, directory in layers:
         for path in sorted(directory.glob("*.repo")):
             try:
                 config = repos._read_ini(path)

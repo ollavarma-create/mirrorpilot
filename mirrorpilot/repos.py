@@ -13,6 +13,20 @@ import os
 import re
 
 REPO_DIR = Path("/etc/yum.repos.d")
+SYSTEM_REPO_DIR = Path("/usr/share/dnf5/repos.d")
+_DEFAULT_REPO_DIR = REPO_DIR
+
+
+def repository_directories() -> tuple[Path, ...]:
+    """Inspect packaged DNF5 repos first, then local repo definitions.
+
+    Preserve the single-directory override used by tests and callers that
+    monkeypatch REPO_DIR. File-level ordering is not proof of DNF precedence.
+    """
+    if REPO_DIR != _DEFAULT_REPO_DIR:
+        return (REPO_DIR,)
+    return (SYSTEM_REPO_DIR, REPO_DIR)
+
 OVERRIDE_DIR = Path("/etc/dnf/repos.override.d")
 VERSION_FILE = Path("/etc/os-release")
 ARCH = os.uname().machine
@@ -68,15 +82,16 @@ def get_repositories(releasever: str | None = None) -> list[Repo]:
     records: dict[str, dict[str, str]] = {}
     origins: dict[str, str] = {}
 
-    for path in sorted(REPO_DIR.glob("*.repo")):
-        try:
-            config = _read_ini(path)
-        except (OSError, ValueError) as exc:
-            raise RuntimeError(f"Unable to read {path}: {exc}") from exc
-        for section in config.sections():
-            values = dict(config.items(section))
-            records.setdefault(section, {}).update(values)
-            origins[section] = str(path)
+    for directory in repository_directories():
+      for path in sorted(directory.glob("*.repo")):
+          try:
+              config = _read_ini(path)
+          except (OSError, ValueError) as exc:
+              raise RuntimeError(f"Unable to read {path}: {exc}") from exc
+          for section in config.sections():
+              values = dict(config.items(section))
+              records.setdefault(section, {}).update(values)
+              origins[section] = str(path)
 
     # DNF5 override fragments have higher priority than .repo entries.
     for path in sorted(OVERRIDE_DIR.glob("*.repo")):
@@ -89,7 +104,7 @@ def get_repositories(releasever: str | None = None) -> list[Repo]:
                 records[section].update(dict(config.items(section)))
 
     if not records:
-        raise RuntimeError("No .repo files found in /etc/yum.repos.d")
+        raise RuntimeError("No .repo files found in inspected DNF5 repository directories")
 
     return [
         Repo(
