@@ -42,11 +42,6 @@ def main() -> int:
             "[updates]\nbaseurl=https://old.example.org/updates/\nmetalink=\n")
         tx = SandboxDNFTransaction(overrides)
         before = tx.tx._snapshot()
-        tx._save({
-            "version": 1, "state": "PREPARED",
-            "before_hex": before.contents.hex(), "before_mode": before.mode,
-            "before_sha256": digest(before.contents), "after_sha256": None,
-        })
         command = [
             "bwrap", "--die-with-parent", "--unshare-all", "--share-net",
             "--ro-bind", "/", "/",
@@ -61,6 +56,29 @@ def main() -> int:
             "fedora.baseurl=https://new.example.org/fedora/",
             "fedora.metalink=",
         ]
+        print("Preparing expected DNF5 output in sandbox (before kill experiment).")
+        prediction = subprocess.run(command, capture_output=True, text=True, timeout=25)
+        if prediction.returncode != 0:
+            print("INCONCLUSIVE: prediction command failed:", prediction.stderr[:500])
+            return 2
+        expected = target.read_bytes()
+        if expected == before.contents:
+            print("INCONCLUSIVE: prediction did not change override.")
+            return 2
+        if b"baseurl=https://old.example.org/updates/" not in expected:
+            print("FAIL: prediction unexpectedly changed updates.")
+            return 2
+        expected_sha = digest(expected)
+        tx.tx.restore(before)
+        if target.read_bytes() != before.contents:
+            print("FAIL: sandbox reset did not restore original bytes.")
+            return 2
+        tx._save({
+            "version": 1, "state": "PREPARED",
+            "before_hex": before.contents.hex(), "before_mode": before.mode,
+            "before_sha256": digest(before.contents), "after_sha256": None,
+        })
+        print("Expected result SHA-256:", expected_sha)
         print("Launching isolated DNF5; will SIGKILL only its process group.")
         try:
             process = subprocess.Popen(
@@ -91,9 +109,9 @@ def main() -> int:
         after = target.read_bytes()
         print("Original bytes preserved:", after == before.contents)
         print("Journal state:", tx._load()["state"])
-        outcome = tx.recover()
+        outcome = tx.recover_expected(expected_sha)
         print("Recovery:", outcome)
-        if outcome == "conflict-manual-review":
+        if outcome == "restored-expected":\n            print("PASS: exact predicted DNF5 output safely restored to original bytes.")\n            if target.read_bytes() != before.contents:\n                print("FAIL: restored bytes differ.")\n                return 3\n        elif outcome == "conflict-manual-review":
             print("PASS: unknown PREPARED result retained for manual review.")
         elif outcome == "already-original":
             print("PASS: no write observed; unchanged snapshot recovered.")
