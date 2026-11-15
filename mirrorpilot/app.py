@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QApplication, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow,
     QMessageBox, QPushButton, QTableWidget, QTableWidgetItem, QTextEdit,
     QVBoxLayout, QWidget, QAbstractItemView, QComboBox, QToolButton,
+    QDialog, QDialogButtonBox,
 )
 from mirrorpilot.check import check_baseurl
 from mirrorpilot.repos import get_repositories, _version
@@ -225,15 +226,25 @@ class MainWindow(QMainWindow):
         except (OSError, ValueError) as exc:
             QMessageBox.warning(self, "Configuration origins", str(exc))
             return
-        dialog = QMessageBox(self)
+        dialog = QDialog(self)
         dialog.setWindowTitle(f"Configuration origins — {repo_id}")
-        dialog.setIcon(QMessageBox.Icon.Information)
-        dialog.setText(
+        dialog.resize(840, 580)
+        dialog.setMinimumSize(480, 300)
+        content = QVBoxLayout(dialog)
+        explanation = QLabel(
             "File-level definitions and potential conflicts. "
             "Effective DNF5 precedence has not yet been verified."
         )
-        dialog.setDetailedText(format_config_report(report))
-        dialog.setStandardButtons(QMessageBox.StandardButton.Close)
+        explanation.setWordWrap(True)
+        content.addWidget(explanation)
+        details = QTextEdit(dialog)
+        details.setReadOnly(True)
+        details.setPlainText(format_config_report(report))
+        details.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
+        content.addWidget(details, 1)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, parent=dialog)
+        buttons.rejected.connect(dialog.reject)
+        content.addWidget(buttons)
         dialog.exec()
 
     def check_selected(self):
