@@ -34,6 +34,7 @@ class MainWindow(QMainWindow):
         self.resize(1000, 600)
         self.repos = []
         self.threads = []
+        self.workers = []  # Retain Python references until background work finishes.
 
         main = QWidget()
         layout = QVBoxLayout(main)
@@ -72,12 +73,14 @@ class MainWindow(QMainWindow):
     def run_job(self, action, args, callback):
         thread = QThread(self)
         worker = Worker(action, *args)
+        self.workers.append(worker)
         worker.moveToThread(thread)
         thread.started.connect(worker.run)
         worker.finished.connect(callback)
         worker.finished.connect(thread.quit)
         worker.finished.connect(worker.deleteLater)
         thread.finished.connect(thread.deleteLater)
+        thread.finished.connect(lambda w=worker: self.workers.remove(w) if w in self.workers else None)
         self.threads.append(thread)
         thread.finished.connect(lambda: self.threads.remove(thread) if thread in self.threads else None)
         thread.start()
