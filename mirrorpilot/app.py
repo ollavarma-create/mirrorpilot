@@ -8,7 +8,7 @@ from PySide6.QtGui import QColor, QBrush
 from PySide6.QtWidgets import (
     QApplication, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow,
     QMessageBox, QPushButton, QTableWidget, QTableWidgetItem, QTextEdit,
-    QVBoxLayout, QWidget, QAbstractItemView,
+    QVBoxLayout, QWidget, QAbstractItemView, QComboBox,
 )
 from mirrorpilot.check import check_baseurl
 from mirrorpilot.repos import get_repositories, _version
@@ -59,6 +59,14 @@ class MainWindow(QMainWindow):
         toolbar.addWidget(self.refresh_button)
         layout.addLayout(toolbar)
 
+        repo_options = QHBoxLayout()
+        repo_options.addWidget(QLabel("Repository to diagnose:"))
+        self.repo_choice = QComboBox()
+        self.repo_choice.addItem("Fedora release (Everything)", "fedora")
+        self.repo_choice.addItem("Fedora updates", "updates")
+        repo_options.addWidget(self.repo_choice)
+        repo_options.addStretch()
+        layout.addLayout(repo_options)
         layout.addWidget(QLabel("Configured repositories"))
         self.table = QTableWidget(0, 4)
         self.table.setHorizontalHeaderLabels(["Repository", "Status", "Effective source", "Config file"])
@@ -73,7 +81,7 @@ class MainWindow(QMainWindow):
         self.table.itemSelectionChanged.connect(self.selection_changed)
         layout.addWidget(self.check_button)
 
-        self.scan_label = "Run diagnostics (8 speed/index checks; metadata on fastest matching mirror)"
+        self.scan_label = "Run diagnostics (up to 8 mirrors; metadata on fastest matching mirror)"
         self.scan_button = QPushButton(self.scan_label)
         self.scan_button.clicked.connect(self.start_scan)
         layout.addWidget(self.scan_button)
@@ -178,6 +186,8 @@ class MainWindow(QMainWindow):
             return
         self.running = True
         self.scan_button.setEnabled(False)
+        self.repo_choice.setEnabled(False)
+        self.version.setEnabled(False)
         self.verify_button.setEnabled(False)
         self.check_button.setEnabled(False)
         self.progress_text = "Finding mirrors…"
@@ -187,7 +197,9 @@ class MainWindow(QMainWindow):
         self.details.clear()
         self.results = []
         self.mirrors.setRowCount(0)
-        self.run_job(run_diagnostics, (self.version.text().strip() or _version(),),
+        self.scan_repo = self.repo_choice.currentData()
+        self.scan_release = self.version.text().strip() or _version()
+        self.run_job(run_diagnostics, (self.scan_release, None, 1, self.scan_repo),
                      self.scan_finished, self.scan_progress)
 
     def scan_finished(self, results, error):
@@ -195,6 +207,8 @@ class MainWindow(QMainWindow):
         self.timer.stop()
         self.scan_button.setText(self.scan_label)
         self.scan_button.setEnabled(True)
+        self.repo_choice.setEnabled(True)
+        self.version.setEnabled(True)
         self.selection_changed()
         if error:
             self.summary.setText("Diagnostics failed")
@@ -210,7 +224,7 @@ class MainWindow(QMainWindow):
         uncertain = sum(r.health == "uncertain" for r in self.results)
         verified = sum(r.health == "verified" for r in self.results)
         self.summary.setText(
-            f"{len(self.results)} mirrors · {verified} verified · {failures} problems · "
+            f"Fedora {self.scan_release} {self.scan_repo} · {len(self.results)} mirrors · {verified} verified · {failures} problems · "
             f"{uncertain} inconclusive · {len(self.results)-verified-failures-uncertain} not fully checked"
             + (f" · Recommended: {winner.speed.country} {winner.speed.mbps:.1f} Mbit/s" if winner else
                " · No verified recommendation yet")
@@ -263,7 +277,7 @@ class MainWindow(QMainWindow):
         entry = self.results[row]
         self.pending_row = row
         self.run_job(audit_referenced,
-                     (entry.speed.url, entry.speed.country, self.version.text().strip() or _version()),
+                     (entry.speed.url, entry.speed.country, self.scan_release),
                      self.verify_finished)
 
     def verify_finished(self, result, error):
