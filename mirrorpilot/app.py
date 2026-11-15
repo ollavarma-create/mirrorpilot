@@ -16,6 +16,7 @@ from mirrorpilot.releases import available_targets
 from mirrorpilot.audit import audit_referenced
 from mirrorpilot.diagnostics import run_diagnostics, check_current_repository, fastest_verified, explain_source
 from mirrorpilot.summary import summary_lines
+from mirrorpilot.changes import build_change_plan, format_change_plan
 
 class Worker(QObject):
     finished = Signal(object, object)
@@ -141,6 +142,11 @@ class MainWindow(QMainWindow):
         self.verify_button.setText("Verify selected metadata")
         self.verify_button.setToolTip("Verify up to 3 referenced metadata files for the selected mirror (up to 512 MiB each). Read-only.")
         layout.addWidget(self.verify_button)
+        self.preview_button = QPushButton("Preview configuration change…")
+        self.preview_button.setToolTip("Show a proposed DNF override for a verified alternative. No backup, authentication or write is performed.")
+        self.preview_button.setEnabled(False)
+        self.preview_button.clicked.connect(self.preview_change)
+        layout.addWidget(self.preview_button)
         layout.addWidget(QLabel("Read-only: no DNF settings, packages or caches are modified."))
         self.setCentralWidget(main)
         self.statusBar().showMessage("Ready")
@@ -244,6 +250,7 @@ class MainWindow(QMainWindow):
         self.repo_choice.setEnabled(False)
         self.version.setEnabled(False)
         self.verify_button.setEnabled(False)
+        self.preview_button.setEnabled(False)
         self.check_button.setEnabled(False)
         self.current_only = current_only
         self.progress_text = "Checking current repository…" if current_only else "Finding mirrors…"
@@ -337,6 +344,10 @@ class MainWindow(QMainWindow):
         row = self.mirrors.currentRow()
         valid = 0 <= row < len(self.results) and bool(self.mirrors.selectedItems())
         self.verify_button.setEnabled(valid and not self.running)
+        self.preview_button.setEnabled(
+            valid and not self.running and self.results[row].health == "verified"
+            and self.results[row].speed.country != "Configured"
+        )
         if not valid:
             return
         self.show_details(self.results[row])
@@ -348,12 +359,35 @@ class MainWindow(QMainWindow):
                  "Metadata: not checked (speed is not proof of integrity)"]
         self.details.setPlainText("\n".join(lines))
 
+    def preview_change(self):
+        row = self.mirrors.currentRow()
+        if (self.running or not 0 <= row < len(self.results)
+                or not self.mirrors.selectedItems()):
+            return
+        entry = self.results[row]
+        if entry.health != "verified" or entry.speed.country == "Configured":
+            return
+        configured = next((r for r in self.repos
+                           if r.repo_id == self.scan_repo and r.status == "enabled"), None)
+        if configured is None:
+            QMessageBox.warning(self, "Preview unavailable", "No enabled configured repository found.")
+            return
+        try:
+            plan = build_change_plan(configured.repo_id, configured.baseurl,
+                                     entry.speed.url, configured.filename)
+        except ValueError as exc:
+            QMessageBox.warning(self, "Preview unavailable", str(exc))
+            return
+        QMessageBox.information(self, "Proposed DNF configuration — preview only",
+                                format_change_plan(plan))
+
     def verify_selected(self):
         row = self.mirrors.currentRow()
         if self.running or not 0 <= row < len(self.results):
             return
         self.running = True
         self.verify_button.setEnabled(False)
+        self.preview_button.setEnabled(False)
         self.scan_button.setEnabled(False)
         self.current_button.setEnabled(False)
         self.verify_button.setText("Verifying selected metadata…")
