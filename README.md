@@ -6,7 +6,6 @@ MirrorPilot helps you investigate slow or broken Fedora repository mirrors, comp
 
 > **Status:** experimental pre-alpha (`0.1.0a1`). Tested on Fedora 44 KDE; other releases and environments need further validation. The project is not affiliated with the Fedora Project.
 
-<!-- SCREENSHOT: Add docs/images/mirrorpilot-main.png when ready. -->
 ![MirrorPilot main window showing Fedora repositories, tested mirrors, and diagnostics](docs/images/mirrorpilot-main.png)
 
 *Screenshot placeholder — add your own screenshot at `docs/images/mirrorpilot-main.png`.*
@@ -51,7 +50,6 @@ No `sudo` is needed to run MirrorPilot. If you already have a local checkout, up
 4. Select a verified alternative and click **Copy DNF5 configuration command…**. Read the command and inspect **Configuration origins…** before applying it.
 5. If you choose to change the configuration, run the copied command **yourself** in a terminal, then use **Verify effective settings**.
 
-<!-- SCREENSHOT: Add docs/images/mirrorpilot-command.png when ready. -->
 ![MirrorPilot dialog showing the copyable DNF5 configuration command](docs/images/mirrorpilot-command.png)
 
 *Screenshot placeholder — add `docs/images/mirrorpilot-command.png`.*
@@ -78,7 +76,6 @@ echo "DNF5 exit code: $?"
 
 For `dnf5 check-update`, exit code **100** means updates are available, **0** means no updates are available, and **1** indicates an error. A working Fedora 44 mirror does not prove that the same server carries Fedora 45.
 
-<!-- SCREENSHOT: Add docs/images/mirrorpilot-verification.png when ready. -->
 ![MirrorPilot successful DNF5 effective-settings verification dialog](docs/images/mirrorpilot-verification.png)
 
 *Screenshot placeholder — add `docs/images/mirrorpilot-verification.png`.*
