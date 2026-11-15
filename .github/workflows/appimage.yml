@@ -22,19 +22,21 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 35
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: pip
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y librsvg2-bin
+          sudo apt-get install -y librsvg2-bin appstream
           python -m pip install --upgrade pip
           python -m pip install '.[test]' 'pyinstaller>=6.0,<7'
       - name: Run unit tests
         run: python -m pytest -q
+      - name: Validate AppStream metadata
+        run: appstreamcli validate packaging/mirrorpilot.appdata.xml
       - name: Build AppImage
         run: bash packaging/build-appimage.sh
       - name: Validate AppDir layout
@@ -45,12 +47,13 @@ jobs:
           test -f dist/MirrorPilot.AppDir/mirrorpilot.svg
           test -s dist/MirrorPilot.AppDir/mirrorpilot.png
           test -e dist/MirrorPilot.AppDir/.DirIcon
+          test -s dist/MirrorPilot.AppDir/usr/share/metainfo/mirrorpilot.appdata.xml
       - name: Check artifact and checksum
         run: |
           test -s dist/SHA256SUMS
           (cd dist && sha256sum -c SHA256SUMS)
       - name: Upload test artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mirrorpilot-appimage-x86_64
           path: |
