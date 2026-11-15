@@ -2,11 +2,13 @@
 from mirrorpilot.diagnostics import fastest_verified
 
 
-def summary_lines(rows, release, repo, current=None):
+def summary_lines(rows, release, repo, current=None, configured_url=None):
     if current is None:
         current = next((r for r in rows if r.speed.country == "Configured"), None)
     if current is None:
-        current_line = "Current source: not tested (no supported configured HTTPS base URL)"
+        current_line = ("Current source: configured HTTPS URL detected; not tested (use Check current)"
+                        if configured_url else
+                        "Current source: not tested (no supported configured HTTPS base URL)")
     elif current.speed.status != "measured":
         detail = current.speed.detail
         if "404" in detail:
