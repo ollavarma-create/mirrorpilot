@@ -25,7 +25,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v7
         with:
-          python-version: '3.11'
+          python-version: '3.15'
           cache: pip
       - name: Install dependencies
         run: |
@@ -33,6 +33,10 @@ jobs:
           sudo apt-get install -y librsvg2-bin appstream
           python -m pip install --upgrade pip
           python -m pip install '.[test]' 'pyinstaller>=6.0,<7'
+      - name: Report packaging toolchain versions
+        run: |
+          python --version
+          python -m pip show PySide6 pyinstaller
       - name: Run unit tests
         run: python -m pytest -q
       - name: Validate AppStream metadata
