@@ -18,6 +18,7 @@ from mirrorpilot.diagnostics import run_diagnostics, check_current_repository, f
 from mirrorpilot.summary import summary_lines
 from mirrorpilot.changes import build_change_plan, format_change_plan, release_change_allowed
 from mirrorpilot.polkit_probe import parse_probe_response
+from mirrorpilot.config_conflicts import inspect_configuration, format_config_report
 
 class Worker(QObject):
     finished = Signal(object, object)
@@ -91,6 +92,13 @@ class MainWindow(QMainWindow):
         self.check_button.setEnabled(False)
         self.check_button.clicked.connect(self.check_selected)
         actions.addWidget(self.check_button)
+        self.conflicts_button = QPushButton("Configuration origins…")
+        self.conflicts_button.setToolTip(
+            "Explain where repository settings are defined and flag possible conflicts. "
+            "Read-only; does not claim to reproduce DNF5 precedence."
+        )
+        self.conflicts_button.clicked.connect(self.show_config_origins)
+        actions.addWidget(self.conflicts_button)
         layout.addLayout(actions)
         layout.addWidget(QLabel("Configured repositories"))
         self.table = QTableWidget(0, 4)
@@ -207,6 +215,26 @@ class MainWindow(QMainWindow):
             url = self.repos[row].baseurl.strip()
             enabled = url.startswith("https://") and "$" not in url and " " not in url
         self.check_button.setEnabled(enabled)
+
+    def show_config_origins(self):
+        row = self.table.currentRow()
+        repo_id = (self.repos[row].repo_id if 0 <= row < len(self.repos)
+                   else self.repo_choice.currentData())
+        try:
+            report = inspect_configuration(repo_id)
+        except (OSError, ValueError) as exc:
+            QMessageBox.warning(self, "Configuration origins", str(exc))
+            return
+        dialog = QMessageBox(self)
+        dialog.setWindowTitle(f"Configuration origins — {repo_id}")
+        dialog.setIcon(QMessageBox.Icon.Information)
+        dialog.setText(
+            "File-level definitions and potential conflicts. "
+            "Effective DNF5 precedence has not yet been verified."
+        )
+        dialog.setDetailedText(format_config_report(report))
+        dialog.setStandardButtons(QMessageBox.StandardButton.Close)
+        dialog.exec()
 
     def check_selected(self):
         row = self.table.currentRow()
