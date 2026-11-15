@@ -1,60 +1,56 @@
-"""Qt 6 GUI for read-only DNF5 diagnostics."""
+"""Qt interface for read-only DNF5 mirror diagnostics."""
 from __future__ import annotations
 
 import sys
-from PySide6.QtCore import QObject, QThread, Signal, Slot, QTimer
+from dataclasses import replace
+from PySide6.QtCore import QObject, QThread, Signal, Slot, QTimer, Qt
+from PySide6.QtGui import QColor, QBrush
 from PySide6.QtWidgets import (
-    QApplication, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
-    QMainWindow, QMessageBox, QPushButton, QTableWidget, QTableWidgetItem,
-    QTextEdit, QVBoxLayout, QWidget,
+    QApplication, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow,
+    QMessageBox, QPushButton, QTableWidget, QTableWidgetItem, QTextEdit,
+    QVBoxLayout, QWidget, QAbstractItemView,
 )
 from mirrorpilot.check import check_baseurl
 from mirrorpilot.repos import get_repositories, _version
-from mirrorpilot.speed import benchmark
-from mirrorpilot.audit import audit, audit_referenced
-
+from mirrorpilot.audit import audit_referenced
+from mirrorpilot.diagnostics import run_diagnostics, fastest_verified
 
 class Worker(QObject):
     finished = Signal(object, object)
-    progress = Signal(int, int)
-    metadata_progress = Signal(str, int, int, int, int)
+    progress = Signal(str, int, int, str)
 
-    def __init__(self, action, *args):
+    def __init__(self, action, args, report=False):
         super().__init__()
-        self.action, self.args = action, args
+        self.action, self.args, self.report = action, args, report
 
     @Slot()
     def run(self):
         try:
-            result = (self.action(*self.args, progress=self.progress.emit) if self.action is benchmark
-                      else self.action(*self.args, progress=self.metadata_progress.emit) if self.action is audit_referenced
-                      else self.action(*self.args))
+            result = self.action(*self.args, progress=self.progress.emit) if self.report else self.action(*self.args)
             self.finished.emit(result, None)
-        except Exception as error:
-            self.finished.emit(None, str(error))
-
+        except Exception as exc:
+            self.finished.emit(None, str(exc))
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("MirrorPilot — DNF5 diagnostics (read-only)")
-        self.resize(1000, 600)
+        self.resize(1120, 680)
         self.repos = []
+        self.results = []
         self.threads = []
-        self.workers = []  # Retain Python references until background work finishes.
-        self.benchmark_label = 'Benchmark approved mirrors (up to 8; read-only)'
-        self.spinner_frames = ('◐', '◓', '◑', '◒')
-        self.spinner_step = 0
-        self.benchmark_progress = 'Finding mirrors…'
-        self.benchmark_timer = QTimer(self)
-        self.benchmark_timer.setInterval(140)
-        self.benchmark_timer.timeout.connect(self.animate_benchmark)
+        self.workers = []
+        self.running = False
+        self.spinner = 0
+        self.progress_text = "Finding mirrors…"
+        self.timer = QTimer(self)
+        self.timer.setInterval(160)
+        self.timer.timeout.connect(self.animate)
 
         main = QWidget()
         layout = QVBoxLayout(main)
-        layout.addWidget(QLabel("DNF5 software repositories — read-only preview"))
         toolbar = QHBoxLayout()
-        toolbar.addWidget(QLabel("Release version:"))
+        toolbar.addWidget(QLabel("Fedora release:"))
         self.version = QLineEdit()
         self.version.setPlaceholderText("Current release or e.g. 45")
         toolbar.addWidget(self.version)
@@ -63,77 +59,75 @@ class MainWindow(QMainWindow):
         toolbar.addWidget(self.refresh_button)
         layout.addLayout(toolbar)
 
+        layout.addWidget(QLabel("Configured repositories"))
         self.table = QTableWidget(0, 4)
         self.table.setHorizontalHeaderLabels(["Repository", "Status", "Effective source", "Config file"])
         self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
-        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.table.itemSelectionChanged.connect(self.selection_changed)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.table.setMaximumHeight(155)
         layout.addWidget(self.table)
-
-        self.check_button = QPushButton("Check selected HTTPS base URL")
+        self.check_button = QPushButton("Check selected repository URL (advanced)")
         self.check_button.setEnabled(False)
         self.check_button.clicked.connect(self.check_selected)
+        self.table.itemSelectionChanged.connect(self.selection_changed)
         layout.addWidget(self.check_button)
-        self.speed_button = QPushButton(self.benchmark_label)
-        self.speed_button.clicked.connect(self.test_speeds)
-        layout.addWidget(self.speed_button)
-        self.speed_table = QTableWidget(0, 6)
-        self.speed_table.setHorizontalHeaderLabels(['Country', 'Mirror URL', 'Median Mbit/s', 'Range Mbit/s', 'Median TTFB ms', 'Status'])
-        self.speed_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.speed_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.speed_table.setMinimumHeight(150)
-        layout.addWidget(self.speed_table)
-        self.audit_button = QPushButton('Audit selected mirror index against Fedora metalink')
-        self.audit_button.setEnabled(False)
-        self.audit_button.clicked.connect(self.audit_selected)
-        layout.addWidget(self.audit_button)
-        self.metadata_label = 'Verify referenced metadata (streaming, max 512 MiB/file)'
-        self.metadata_button = QPushButton(self.metadata_label)
-        self.metadata_button.setEnabled(False)
-        self.metadata_button.clicked.connect(self.verify_selected_metadata)
-        layout.addWidget(self.metadata_button)
-        self.speed_table.itemSelectionChanged.connect(self.audit_selection_changed)
-        self.benchmark_results = []
+
+        self.scan_label = "Run diagnostics (8 speed/index checks; metadata on fastest matching mirror)"
+        self.scan_button = QPushButton(self.scan_label)
+        self.scan_button.clicked.connect(self.start_scan)
+        layout.addWidget(self.scan_button)
+        self.summary = QLabel("Not checked. Speed alone does not establish repository health.")
+        layout.addWidget(self.summary)
+
+        self.mirrors = QTableWidget(0, 6)
+        self.mirrors.setHorizontalHeaderLabels(["Country", "Mirror", "Mbit/s", "Range", "Health", "Index / Metadata"])
+        self.mirrors.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.mirrors.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.mirrors.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.mirrors.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.mirrors.itemSelectionChanged.connect(self.selected_mirror)
+        layout.addWidget(self.mirrors, 1)
+
+        self.verify_button = QPushButton("Verify selected mirror metadata (optional; up to 512 MiB/file)")
+        self.verify_button.setEnabled(False)
+        self.verify_button.clicked.connect(self.verify_selected)
+        layout.addWidget(self.verify_button)
+        layout.addWidget(QLabel("Details (select a mirror to inspect errors and checks)"))
         self.details = QTextEdit()
         self.details.setReadOnly(True)
-        self.details.setMaximumHeight(125)
+        self.details.setMaximumHeight(105)
         layout.addWidget(self.details)
-        layout.addWidget(QLabel("No repositories, installed packages or DNF settings are changed."))
+        layout.addWidget(QLabel("Read-only: no DNF settings, packages or caches are modified."))
         self.setCentralWidget(main)
         self.statusBar().showMessage("Ready")
         self.load_repos()
 
-    def run_job(self, action, args, callback, progress_callback=None, metadata_callback=None):
+    def run_job(self, action, args, callback, progress=None):
         thread = QThread(self)
-        worker = Worker(action, *args)
+        worker = Worker(action, args, report=progress is not None)
         self.workers.append(worker)
+        self.threads.append(thread)
         worker.moveToThread(thread)
         thread.started.connect(worker.run)
         worker.finished.connect(callback)
-        if progress_callback is not None:
-            worker.progress.connect(progress_callback)
-        if metadata_callback is not None:
-            worker.metadata_progress.connect(metadata_callback)
+        if progress is not None:
+            worker.progress.connect(progress)
         worker.finished.connect(thread.quit)
         worker.finished.connect(worker.deleteLater)
         thread.finished.connect(thread.deleteLater)
         thread.finished.connect(lambda w=worker: self.workers.remove(w) if w in self.workers else None)
-        self.threads.append(thread)
-        thread.finished.connect(lambda: self.threads.remove(thread) if thread in self.threads else None)
+        thread.finished.connect(lambda t=thread: self.threads.remove(t) if t in self.threads else None)
         thread.start()
 
     def load_repos(self):
         self.refresh_button.setEnabled(False)
-        self.check_button.setEnabled(False)
-        self.statusBar().showMessage("Reading effective DNF5 configuration...")
         self.run_job(get_repositories, (self.version.text().strip() or None,), self.loaded)
 
     def loaded(self, repos, error):
         self.refresh_button.setEnabled(True)
         if error:
-            self.statusBar().showMessage("Unable to read DNF5 repositories")
-            QMessageBox.warning(self, "DNF5 error", error)
+            QMessageBox.warning(self, "Repository error", error)
             return
         self.repos = repos
         self.table.setRowCount(len(repos))
@@ -143,128 +137,146 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"Found {len(repos)} repositories")
 
     def selection_changed(self):
-        index = self.table.currentRow()
-        if not 0 <= index < len(self.repos):
-            self.check_button.setEnabled(False)
-            return
-        repo = self.repos[index]
-        self.details.setPlainText(
-            f"ID: {repo.repo_id}\nBase URL: {repo.baseurl}\n"
-            f"Metalink: {repo.metalink}\nMirrorlist: {repo.mirrorlist}"
-        )
-        url = repo.baseurl.strip()
-        self.check_button.setEnabled(
-            url.startswith("https://") and "$" not in url and " " not in url
-        )
+        row = self.table.currentRow()
+        enabled = 0 <= row < len(self.repos) and not self.running
+        if enabled:
+            url = self.repos[row].baseurl.strip()
+            enabled = url.startswith("https://") and "$" not in url and " " not in url
+        self.check_button.setEnabled(enabled)
 
     def check_selected(self):
-        index = self.table.currentRow()
-        if not 0 <= index < len(self.repos):
+        row = self.table.currentRow()
+        if not 0 <= row < len(self.repos):
             return
         self.check_button.setEnabled(False)
-        self.statusBar().showMessage("Testing repository metadata...")
-        self.run_job(check_baseurl, (self.repos[index].baseurl,), self.checked)
+        self.run_job(check_baseurl, (self.repos[row].baseurl,), self.checked)
 
-    def animate_benchmark(self):
-        frame = self.spinner_frames[self.spinner_step % len(self.spinner_frames)]
-        self.spinner_step += 1
-        self.speed_button.setText(f'{frame} {self.benchmark_progress}')
+    def checked(self, result, error):
+        self.selection_changed()
+        self.details.setPlainText("Repository check failed: " + error if error else
+                                  f"{result.status.upper()}: {result.message}\n{result.source}")
 
-    def benchmark_progress_changed(self, done, total):
-        self.benchmark_progress = f'Testing mirror {done + 1}/{total}…' if done < total else f'Finishing {total}/{total}…'
-        if total == 0:
-            self.benchmark_progress = 'No eligible mirrors found…'
-        self.animate_benchmark()
+    def animate(self):
+        self.spinner += 1
+        self.scan_button.setText(("◐", "◓", "◑", "◒")[self.spinner % 4] + " " + self.progress_text)
 
-    def test_speeds(self):
-        self.speed_button.setEnabled(False)
-        self.benchmark_progress = 'Finding mirrors…'
-        self.animate_benchmark()
-        self.benchmark_timer.start()
-        self.statusBar().showMessage('Mirror benchmark running...')
-        self.run_job(benchmark, (self.version.text().strip() or _version(),),
-                     self.speeds_finished, self.benchmark_progress_changed)
+    def scan_progress(self, phase, done, total, detail):
+        if phase == "benchmark":
+            self.progress_text = f"Benchmarking mirror {min(done + 1, total)}/{total}…" if done < total else "Checking indexes…"
+        elif phase == "index":
+            self.progress_text = f"Checking index {done}/{total}…"
+        elif phase == "metadata":
+            self.progress_text = f"Verifying metadata {done}/{total}…"
+        elif phase == "bytes":
+            self.progress_text = "Verifying " + detail
+        self.animate()
 
-    def speeds_finished(self, results, error):
-        self.benchmark_timer.stop()
-        self.speed_button.setText(self.benchmark_label)
-        self.speed_button.setEnabled(True)
-        if error:
-            self.details.setPlainText('Mirror speed test failed: ' + error)
-            self.statusBar().showMessage('Speed test failed')
+    def start_scan(self):
+        # Explicit opt-in: only one full metadata verification by default.
+        # Eight full verifications could download up to 12 GiB.
+        if self.running:
             return
-        if not results:
-            self.details.setPlainText('No approved mirror hosts found. No speed-test connections made.')
-            return
-        self.benchmark_results = results
-        self.audit_button.setEnabled(False)
-        self.metadata_button.setEnabled(False)
-        self.speed_table.setRowCount(len(results))
-        for i, result in enumerate(results):
-            values = (result.country, result.url, str(result.mbps) if result.mbps is not None else '-',
-                      '{}–{}'.format(result.min_mbps, result.max_mbps) if result.min_mbps is not None else '-',
-                      str(result.ttfb_ms) if result.ttfb_ms is not None else '-', result.status)
-            for col, value in enumerate(values):
-                self.speed_table.setItem(i, col, QTableWidgetItem(value))
-        self.details.setPlainText('Three bounded samples per mirror; median shown. Country is MirrorManager registration, not verified location. Integrity/freshness not checked.')
-        self.statusBar().showMessage('Tested {} mirrors (indicative speeds)'.format(len(results)))
-    def audit_selection_changed(self):
-        row = self.speed_table.currentRow()
-        self.audit_button.setEnabled(0 <= row < len(self.benchmark_results))
-        self.metadata_button.setEnabled(0 <= row < len(self.benchmark_results))
+        self.running = True
+        self.scan_button.setEnabled(False)
+        self.verify_button.setEnabled(False)
+        self.check_button.setEnabled(False)
+        self.progress_text = "Finding mirrors…"
+        self.timer.start()
+        self.animate()
+        self.summary.setText("Running read-only diagnostics…")
+        self.details.clear()
+        self.results = []
+        self.mirrors.setRowCount(0)
+        self.run_job(run_diagnostics, (self.version.text().strip() or _version(),),
+                     self.scan_finished, self.scan_progress)
 
-    def audit_selected(self):
-        row = self.speed_table.currentRow()
-        if not 0 <= row < len(self.benchmark_results):
-            return
-        result = self.benchmark_results[row]
-        self.audit_button.setEnabled(False)
-        self.audit_button.setText('Checking Fedora reference…')
-        self.run_job(audit, (result.url, result.country, self.version.text().strip() or _version()), self.audit_finished)
-
-    def audit_finished(self, result, error):
-        self.audit_button.setText('Audit selected mirror index against Fedora metalink')
-        self.audit_selection_changed()
-        if error:
-            self.details.setPlainText('Audit failed: ' + error)
-            return
-        self.details.setPlainText(f'{result.status.upper()}: {result.message}\n{result.source}')
-        self.statusBar().showMessage('Mirror index audit: ' + result.status)
-
-    def verify_selected_metadata(self):
-        row = self.speed_table.currentRow()
-        if not 0 <= row < len(self.benchmark_results):
-            return
-        result = self.benchmark_results[row]
-        self.metadata_button.setEnabled(False)
-        self.metadata_button.setText('Checking referenced metadata…')
-        self.run_job(audit_referenced, (result.url, result.country, self.version.text().strip() or _version()),
-                     self.metadata_finished, metadata_callback=self.metadata_progress_changed)
-
-    def metadata_progress_changed(self, kind, index, total, done, size):
-        amount = f'{done / 1048576:.1f} / {size / 1048576:.1f} MiB' if size else f'{done / 1048576:.1f} MiB'
-        self.metadata_button.setText(f'Checking {kind} {index}/{total}: {amount}…')
-
-    def metadata_finished(self, result, error):
-        self.metadata_button.setText(self.metadata_label)
-        self.audit_selection_changed()
-        if error:
-            self.details.setPlainText('Metadata verification failed: ' + error)
-            return
-        self.details.setPlainText(f'{result.status.upper()}: {result.message}\n{result.source}')
-        self.statusBar().showMessage('Metadata verification: ' + result.status)
-
-    def checked(self, diagnostic, error):
+    def scan_finished(self, results, error):
+        self.running = False
+        self.timer.stop()
+        self.scan_button.setText(self.scan_label)
+        self.scan_button.setEnabled(True)
         self.selection_changed()
         if error:
-            self.details.setPlainText("Diagnostic failed: " + error)
-            self.statusBar().showMessage("Diagnostic failed")
-        else:
-            self.details.setPlainText(
-                f"{diagnostic.status.upper()}: {diagnostic.message}\n{diagnostic.source}"
-            )
-            self.statusBar().showMessage(f"Diagnostic status: {diagnostic.status}")
+            self.summary.setText("Diagnostics failed")
+            self.details.setPlainText(error)
+            return
+        self.results = results
+        self.render_results()
 
+    def render_results(self):
+        self.mirrors.setRowCount(len(self.results))
+        winner = fastest_verified(self.results)
+        failures = sum(r.health in ("problem", "error") for r in self.results)
+        uncertain = sum(r.health == "uncertain" for r in self.results)
+        verified = sum(r.health == "verified" for r in self.results)
+        self.summary.setText(
+            f"{len(self.results)} mirrors · {verified} verified · {failures} problems · "
+            f"{uncertain} inconclusive · {len(self.results)-verified-failures-uncertain} not fully checked"
+            + (f" · Recommended: {winner.speed.country} {winner.speed.mbps:.1f} Mbit/s" if winner else
+               " · No verified recommendation yet")
+        )
+        for i, row in enumerate(self.results):
+            speed = row.speed
+            label = {"verified": "Verified", "problem": "Problem", "error": "Error",
+                     "uncertain": "Inconclusive", "unchecked": "Not checked"}[row.health]
+            if row is winner:
+                label = "★ Recommended"
+            checks = f"{row.index.status if row.index else '—'} / {row.metadata.status if row.metadata else 'not checked'}"
+            values = [speed.country, speed.url,
+                      f"{speed.mbps:.2f}" if speed.mbps is not None else "—",
+                      f"{speed.min_mbps:.1f}–{speed.max_mbps:.1f}" if speed.min_mbps is not None else "—",
+                      label, checks]
+            color = {"verified": "#d7f0dd", "problem": "#ffd9d9", "error": "#ffd9d9",
+                     "uncertain": "#fff0c2", "unchecked": None}[row.health]
+            for j, value in enumerate(values):
+                item = QTableWidgetItem(value)
+                item.setData(Qt.ItemDataRole.UserRole, i)
+                if color:
+                    item.setBackground(QBrush(QColor(color)))
+                if row is winner:
+                    item.setForeground(QBrush(QColor("#166534")))
+                self.mirrors.setItem(i, j, item)
+        self.statusBar().showMessage("Diagnostics complete")
+        self.selected_mirror()
+
+    def selected_mirror(self):
+        row = self.mirrors.currentRow()
+        valid = 0 <= row < len(self.results)
+        self.verify_button.setEnabled(valid and not self.running)
+        if not valid:
+            return
+        entry = self.results[row]
+        lines = [entry.speed.url, f"Speed: {entry.speed.status} — {entry.speed.detail}",
+                 f"Index: {entry.index.status}: {entry.index.message}" if entry.index else "Index: not checked",
+                 f"Metadata: {entry.metadata.status}: {entry.metadata.message}" if entry.metadata else
+                 "Metadata: not checked (speed is not proof of integrity)"]
+        self.details.setPlainText("\n".join(lines))
+
+    def verify_selected(self):
+        row = self.mirrors.currentRow()
+        if self.running or not 0 <= row < len(self.results):
+            return
+        self.running = True
+        self.verify_button.setEnabled(False)
+        self.scan_button.setEnabled(False)
+        self.verify_button.setText("Verifying selected metadata…")
+        entry = self.results[row]
+        self.pending_row = row
+        self.run_job(audit_referenced,
+                     (entry.speed.url, entry.speed.country, self.version.text().strip() or _version()),
+                     self.verify_finished)
+
+    def verify_finished(self, result, error):
+        self.running = False
+        self.scan_button.setEnabled(True)
+        self.verify_button.setText("Verify selected mirror metadata (optional; up to 512 MiB/file)")
+        if error:
+            self.details.setPlainText("Verification failed: " + error)
+        else:
+            row = self.pending_row
+            self.results[row] = replace(self.results[row], metadata=result)
+            self.render_results()
+        self.selected_mirror()
 
 def main():
     app = QApplication(sys.argv)
@@ -272,6 +284,5 @@ def main():
     window.show()
     return app.exec()
 
-
 if __name__ == "__main__":
-    raise SystemExit(main())
+    sys.exit(main())
