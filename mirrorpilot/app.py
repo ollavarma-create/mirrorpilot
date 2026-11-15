@@ -377,11 +377,11 @@ class MainWindow(QMainWindow):
         if not release_change_allowed(installed, target):
             QMessageBox.warning(
                 self, "Diagnostic only — different Fedora release",
-                f"Installed: Fedora {installed}\\n"
-                f"Diagnostic target: Fedora {target}\\n\\n"
+                f"Installed: Fedora {installed}\n"
+                f"Diagnostic target: Fedora {target}\n\n"
                 "This verified mirror can be inspected, but it must not be "
-                "configured as an active repository for the installed Fedora.\\n\\n"
-                f"Mirror: {entry.speed.url}\\n\\n"
+                "configured as an active repository for the installed Fedora.\n\n"
+                f"Mirror: {entry.speed.url}\n\n"
                 "Use Fedora's official system-upgrade procedure to change "
                 "releases. No settings have been changed."
             )
