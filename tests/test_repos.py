@@ -49,11 +49,9 @@ def test_fedora45_packaged_repos_and_local_repos(tmp_path, monkeypatch):
     )
     (local_dir / "vscode.repo").write_text("[code]\nname=VS Code\nbaseurl=https://example.org/code\n")
     monkeypatch.setattr(repos, "SYSTEM_REPO_DIR", system_dir)
-    monkeypatch.setattr(repos, "REPO_DIR", repos._DEFAULT_REPO_DIR)
-    monkeypatch.setattr(repos, "OVERRIDE_DIR", overrides)
-    # Keep the local directory isolated by patching the default-path constant too.
     monkeypatch.setattr(repos, "_DEFAULT_REPO_DIR", local_dir)
     monkeypatch.setattr(repos, "REPO_DIR", local_dir)
+    monkeypatch.setattr(repos, "OVERRIDE_DIR", overrides)
     found = repos.get_repositories("45")
     assert {item.repo_id for item in found} == {"fedora", "updates", "code"}
     assert next(item for item in found if item.repo_id == "fedora").filename == str(system_dir / "fedora.repo")
