@@ -25,7 +25,8 @@ def test_recovery_after_simulated_crash(tmp_path, checkpoint):
 
     # Fresh object models a restarted process.
     recovered = DurableSandboxTransaction(tmp_path)
-    assert recovered.recover() == "restored"
+    expected = "unchanged" if checkpoint == "PREPARED" else "restored"
+    assert recovered.recover() == expected
     assert target.read_bytes() == b"original"
     assert target.stat().st_mode & 0o777 == 0o640
     assert recovered.recover() == "clean"
