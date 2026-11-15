@@ -112,6 +112,11 @@ In the Fedora 44 development environment, the latest reported run completed with
 
 Bug reports are especially welcome for DNF5 configuration differences, mirror discovery timeouts, Fedora release changes, and confusing diagnostic messages. Please include the Fedora release, steps to reproduce, and relevant non-sensitive logs.
 
+## Technical documentation
+
+- [Architecture and design](docs/DESIGN.md) — components, verification boundaries, DNF5 integration, and safety invariants.
+- [Testing and field validation](docs/TESTING.md) — regression coverage, Fedora 44 case studies, and manual acceptance checks.
+
 ## Roadmap
 
 Near-term priorities are documentation, reproducible field testing, clear diagnostic messages, and validation across Fedora releases. A production privileged writer is **not** planned as part of the current read-only workflow.
