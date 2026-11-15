@@ -17,6 +17,7 @@ from mirrorpilot.audit import audit, audit_referenced
 class Worker(QObject):
     finished = Signal(object, object)
     progress = Signal(int, int)
+    metadata_progress = Signal(str, int, int, int, int)
 
     def __init__(self, action, *args):
         super().__init__()
@@ -25,7 +26,9 @@ class Worker(QObject):
     @Slot()
     def run(self):
         try:
-            result = self.action(*self.args, progress=self.progress.emit) if self.action is benchmark else self.action(*self.args)
+            result = (self.action(*self.args, progress=self.progress.emit) if self.action is benchmark
+                      else self.action(*self.args, progress=self.metadata_progress.emit) if self.action is audit_referenced
+                      else self.action(*self.args))
             self.finished.emit(result, None)
         except Exception as error:
             self.finished.emit(None, str(error))
@@ -85,7 +88,8 @@ class MainWindow(QMainWindow):
         self.audit_button.setEnabled(False)
         self.audit_button.clicked.connect(self.audit_selected)
         layout.addWidget(self.audit_button)
-        self.metadata_button = QPushButton('Verify referenced metadata (up to 3 files, 32 MiB each)')
+        self.metadata_label = 'Verify referenced metadata (streaming, max 512 MiB/file)'
+        self.metadata_button = QPushButton(self.metadata_label)
         self.metadata_button.setEnabled(False)
         self.metadata_button.clicked.connect(self.verify_selected_metadata)
         layout.addWidget(self.metadata_button)
@@ -100,7 +104,7 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("Ready")
         self.load_repos()
 
-    def run_job(self, action, args, callback, progress_callback=None):
+    def run_job(self, action, args, callback, progress_callback=None, metadata_callback=None):
         thread = QThread(self)
         worker = Worker(action, *args)
         self.workers.append(worker)
@@ -109,6 +113,8 @@ class MainWindow(QMainWindow):
         worker.finished.connect(callback)
         if progress_callback is not None:
             worker.progress.connect(progress_callback)
+        if metadata_callback is not None:
+            worker.metadata_progress.connect(metadata_callback)
         worker.finished.connect(thread.quit)
         worker.finished.connect(worker.deleteLater)
         thread.finished.connect(thread.deleteLater)
@@ -232,10 +238,15 @@ class MainWindow(QMainWindow):
         result = self.benchmark_results[row]
         self.metadata_button.setEnabled(False)
         self.metadata_button.setText('Checking referenced metadata…')
-        self.run_job(audit_referenced, (result.url, result.country, self.version.text().strip() or _version()), self.metadata_finished)
+        self.run_job(audit_referenced, (result.url, result.country, self.version.text().strip() or _version()),
+                     self.metadata_finished, metadata_callback=self.metadata_progress_changed)
+
+    def metadata_progress_changed(self, kind, index, total, done, size):
+        amount = f'{done / 1048576:.1f} / {size / 1048576:.1f} MiB' if size else f'{done / 1048576:.1f} MiB'
+        self.metadata_button.setText(f'Checking {kind} {index}/{total}: {amount}…')
 
     def metadata_finished(self, result, error):
-        self.metadata_button.setText('Verify referenced metadata (up to 3 files, 32 MiB each)')
+        self.metadata_button.setText(self.metadata_label)
         self.audit_selection_changed()
         if error:
             self.details.setPlainText('Metadata verification failed: ' + error)
