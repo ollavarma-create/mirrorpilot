@@ -102,3 +102,11 @@ def test_range_is_recorded(monkeypatch):
     result = speed.probe("https://example.org/repo/", "EE")
     assert result.min_mbps == 20
     assert result.max_mbps == 200
+
+def test_progress_reports_each_mirror(monkeypatch):
+    monkeypatch.setattr(speed, 'discover', lambda *args: [('https://a.example/', 'FI'), ('https://b.example/', 'SE')])
+    monkeypatch.setattr(speed, 'probe', lambda base, country: speed.MirrorResult(base, country, 'measured', 10, 100, 100, 'ok'))
+    events = []
+    results = speed.benchmark('45', progress=lambda done, total: events.append((done, total)))
+    assert len(results) == 2
+    assert events == [(0, 2), (1, 2), (2, 2)]
