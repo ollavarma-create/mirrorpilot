@@ -15,6 +15,7 @@ from mirrorpilot.repos import get_repositories, _version
 from mirrorpilot.releases import available_targets
 from mirrorpilot.audit import audit_referenced
 from mirrorpilot.diagnostics import run_diagnostics, fastest_verified, explain_source
+from mirrorpilot.summary import summary_lines
 
 class Worker(QObject):
     finished = Signal(object, object)
@@ -254,12 +255,9 @@ class MainWindow(QMainWindow):
         failures = sum(r.health in ("problem", "error") for r in self.results)
         uncertain = sum(r.health == "uncertain" for r in self.results)
         verified = sum(r.health == "verified" for r in self.results)
-        self.summary.setText(
-            f"Fedora {self.scan_release} {self.scan_repo} · {len(self.results)} sources · {verified} verified · {failures} problems · "
-            f"{uncertain} inconclusive · {len(self.results)-verified-failures-uncertain} not fully checked"
-            + (f" · Recommended: {winner.speed.country} {winner.speed.mbps:.1f} Mbit/s" if winner else
-               " · No verified recommendation yet")
-        )
+        self.summary.setWordWrap(True)
+        self.summary.setText("\n".join(summary_lines(
+            self.results, self.scan_release, self.scan_repo)))
         for i, row in enumerate(self.results):
             speed = row.speed
             label = {"verified": "Verified", "problem": "Problem", "error": "Error",
@@ -285,8 +283,6 @@ class MainWindow(QMainWindow):
                     item.setForeground(QBrush(QColor("#166534")))
                 self.mirrors.setItem(i, j, item)
         current = next((r for r in self.results if r.speed.country == "Configured"), None)
-        self.summary.setWordWrap(True)
-        self.summary.setText(explain_source(current) + "  " + self.summary.text())
         self.statusBar().showMessage("Diagnostics complete")
         if current is not None and current.health in ("problem", "error", "uncertain"):
             self.mirrors.selectRow(self.results.index(current))
