@@ -14,7 +14,7 @@ from mirrorpilot.check import check_baseurl
 from mirrorpilot.repos import get_repositories, _version
 from mirrorpilot.releases import available_targets
 from mirrorpilot.audit import audit_referenced
-from mirrorpilot.diagnostics import run_diagnostics, fastest_verified, explain_source
+from mirrorpilot.diagnostics import run_diagnostics, check_current_repository, fastest_verified, explain_source
 from mirrorpilot.summary import summary_lines
 
 class Worker(QObject):
@@ -95,7 +95,11 @@ class MainWindow(QMainWindow):
         self.table.itemSelectionChanged.connect(self.selection_changed)
         layout.addWidget(self.check_button)
 
-        self.scan_label = "Run diagnostics (up to 8 mirrors; metadata on fastest matching mirror)"
+        self.current_label = "Check current repository (availability and metadata)"
+        self.current_button = QPushButton(self.current_label)
+        self.current_button.clicked.connect(self.start_current_check)
+        layout.addWidget(self.current_button)
+        self.scan_label = "Find better mirrors (up to 8; compare speed and integrity)"
         self.scan_button = QPushButton(self.scan_label)
         self.scan_button.clicked.connect(self.start_scan)
         layout.addWidget(self.scan_button)
@@ -193,7 +197,8 @@ class MainWindow(QMainWindow):
 
     def animate(self):
         self.spinner += 1
-        self.scan_button.setText(("◐", "◓", "◑", "◒")[self.spinner % 4] + " " + self.progress_text)
+        active = self.current_button if getattr(self, "current_only", False) else self.scan_button
+        active.setText(("◐", "◓", "◑", "◒")[self.spinner % 4] + " " + self.progress_text)
 
     def scan_progress(self, phase, done, total, detail):
         if phase == "benchmark":
@@ -208,18 +213,23 @@ class MainWindow(QMainWindow):
             self.progress_text = "Verifying " + detail
         self.animate()
 
-    def start_scan(self):
+    def start_current_check(self):
+        self.start_scan(current_only=True)
+
+    def start_scan(self, current_only=False):
         # Explicit opt-in: only one full metadata verification by default.
         # Eight full verifications could download up to 12 GiB.
         if self.running:
             return
         self.running = True
         self.scan_button.setEnabled(False)
+        self.current_button.setEnabled(False)
         self.repo_choice.setEnabled(False)
         self.version.setEnabled(False)
         self.verify_button.setEnabled(False)
         self.check_button.setEnabled(False)
-        self.progress_text = "Finding mirrors…"
+        self.current_only = current_only
+        self.progress_text = "Checking current repository…" if current_only else "Finding mirrors…"
         self.timer.start()
         self.animate()
         self.summary.setText("Running read-only diagnostics…")
@@ -231,13 +241,21 @@ class MainWindow(QMainWindow):
         configured = next((r for r in self.repos
                            if r.repo_id == self.scan_repo and r.status == "enabled"), None)
         self.configured_url = configured.baseurl.strip() if configured and configured.baseurl.strip().startswith("https://") else None
-        self.run_job(run_diagnostics, (self.scan_release, 1, self.scan_repo, self.configured_url),
-                     self.scan_finished, self.scan_progress)
+        if current_only:
+            self.run_job(check_current_repository,
+                         (self.scan_release, self.scan_repo, self.configured_url),
+                         self.scan_finished, self.scan_progress)
+        else:
+            self.run_job(run_diagnostics,
+                         (self.scan_release, 1, self.scan_repo, self.configured_url),
+                         self.scan_finished, self.scan_progress)
 
     def scan_finished(self, results, error):
         self.running = False
         self.timer.stop()
         self.scan_button.setText(self.scan_label)
+        self.current_button.setText(self.current_label)
+        self.current_button.setEnabled(True)
         self.scan_button.setEnabled(True)
         self.repo_choice.setEnabled(True)
         self.version.setEnabled(True)
@@ -309,6 +327,7 @@ class MainWindow(QMainWindow):
         self.running = True
         self.verify_button.setEnabled(False)
         self.scan_button.setEnabled(False)
+        self.current_button.setEnabled(False)
         self.verify_button.setText("Verifying selected metadata…")
         entry = self.results[row]
         self.pending_row = row
@@ -319,6 +338,7 @@ class MainWindow(QMainWindow):
     def verify_finished(self, result, error):
         self.running = False
         self.scan_button.setEnabled(True)
+        self.current_button.setEnabled(True)
         self.verify_button.setText("Verify selected mirror metadata (optional; up to 512 MiB/file)")
         if error:
             self.details.setPlainText("Verification failed: " + error)
