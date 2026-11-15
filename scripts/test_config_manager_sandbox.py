@@ -11,6 +11,10 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from mirrorpilot.dnf_sandbox_transaction import SandboxDNFTransaction
 
 
 def run(command: list[str], env: dict[str, str]) -> subprocess.CompletedProcess[str]:
@@ -76,15 +80,34 @@ def main() -> int:
         ]
         print("Sandbox write test; no host repository files are writable.")
         before = override.read_bytes()
-        result = run(prefix + [
+        tx = SandboxDNFTransaction(override_dir)
+        command = prefix + [
             "config-manager", "setopt",
             "fedora.baseurl=https://new.example.org/fedora/",
             "fedora.metalink=",
-        ], env)
-        after = override.read_bytes()
-        if result.returncode:
-            print("INCONCLUSIVE: config-manager command failed.")
+        ]
+        print("=== transaction-managed DNF5 setopt ===")
+        def verify_change():
+            result = subprocess.run(
+                prefix + ["--dump-repo-config=fedora,updates"],
+                env=env, text=True, capture_output=True, timeout=25, check=False,
+            )
+            return (result.returncode == 0
+                    and "baseurl = https://new.example.org/fedora/" in result.stdout
+                    and "baseurl = https://old.example.org/updates/" in result.stdout)
+
+        try:
+            status = tx.apply(command, verify_change)
+        except Exception as error:
+            print("FAIL: transaction-managed DNF5 write:", error)
+            print("Recovery status:", tx.recover())
             return 3
+        if status != "verified":
+            print("FAIL: unexpected transaction status:", status)
+            return 3
+        print("PASS: transaction journal VERIFIED and effective values checked.")
+        tx.clear_verified()
+        after = override.read_bytes()
         print("Sandbox override after setopt:\n", after.decode(errors="replace"))
         if before == after:
             print("INCONCLUSIVE: no change to sandbox override.")
