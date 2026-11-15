@@ -462,7 +462,10 @@ class MainWindow(QMainWindow):
         layout.addWidget(snippet)
         buttons = QHBoxLayout()
         copy_button = QPushButton("Copy DNF5 command")
-        copy_button.clicked.connect(lambda: QApplication.clipboard().setText(manual.snippet))
+        def copy_command():
+            QApplication.clipboard().setText(manual.snippet)
+            copy_button.setText("Copied!")
+        copy_button.clicked.connect(copy_command)
         buttons.addWidget(copy_button)
         verify_button = QPushButton("Verify effective settings")
         def verify():
@@ -474,7 +477,7 @@ class MainWindow(QMainWindow):
             if ok:
                 QMessageBox.information(dialog, "DNF5 verification", message)
             else:
-                QMessageBox.warning(dialog, "DNF5 verification", message)
+                QMessageBox.information(dialog, "DNF5 verification", message)
         verify_button.clicked.connect(verify)
         buttons.addWidget(verify_button)
         close_button = QPushButton("Close")
