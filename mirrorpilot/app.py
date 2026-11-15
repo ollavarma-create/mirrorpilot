@@ -16,7 +16,7 @@ from mirrorpilot.releases import available_targets
 from mirrorpilot.audit import audit_referenced
 from mirrorpilot.diagnostics import run_diagnostics, check_current_repository, fastest_verified, explain_source
 from mirrorpilot.summary import summary_lines
-from mirrorpilot.changes import build_change_plan, format_change_plan
+from mirrorpilot.changes import build_change_plan, format_change_plan, release_change_allowed
 
 class Worker(QObject):
     finished = Signal(object, object)
@@ -143,7 +143,7 @@ class MainWindow(QMainWindow):
         self.verify_button.setToolTip("Verify up to 3 referenced metadata files for the selected mirror (up to 512 MiB each). Read-only.")
         layout.addWidget(self.verify_button)
         self.preview_button = QPushButton("Preview configuration change…")
-        self.preview_button.setToolTip("Show a proposed DNF override for a verified alternative. No backup, authentication or write is performed.")
+        self.preview_button.setToolTip("Preview a verified mirror. When the diagnostic release differs from the installed Fedora, configuration changes are blocked.")
         self.preview_button.setEnabled(False)
         self.preview_button.clicked.connect(self.preview_change)
         layout.addWidget(self.preview_button)
@@ -372,9 +372,24 @@ class MainWindow(QMainWindow):
         if configured is None:
             QMessageBox.warning(self, "Preview unavailable", "No enabled configured repository found.")
             return
+        installed = _version()
+        target = self.scan_release
+        if not release_change_allowed(installed, target):
+            QMessageBox.warning(
+                self, "Diagnostic only — different Fedora release",
+                f"Installed: Fedora {installed}\\n"
+                f"Diagnostic target: Fedora {target}\\n\\n"
+                "This verified mirror can be inspected, but it must not be "
+                "configured as an active repository for the installed Fedora.\\n\\n"
+                f"Mirror: {entry.speed.url}\\n\\n"
+                "Use Fedora's official system-upgrade procedure to change "
+                "releases. No settings have been changed."
+            )
+            return
         try:
             plan = build_change_plan(configured.repo_id, configured.baseurl,
-                                     entry.speed.url, configured.filename)
+                                     entry.speed.url, configured.filename,
+                                     target_release=target)
         except ValueError as exc:
             QMessageBox.warning(self, "Preview unavailable", str(exc))
             return
