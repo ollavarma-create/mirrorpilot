@@ -12,6 +12,8 @@ from urllib.parse import urlsplit
 import ipaddress
 import re
 
+from mirrorpilot.repos import _version
+
 ALLOWED_REPOS = frozenset({"fedora", "updates"})
 OVERRIDE_PATH = Path("/etc/dnf/repos.override.d/99_mirrorpilot.repo")
 _REPO_ID = re.compile(r"^[A-Za-z0-9_.-]{1,64}$")
@@ -26,6 +28,8 @@ class ChangePlan:
     target_file: str
     preview: str
     warnings: tuple[str, ...]
+    installed_release: str
+    target_release: str
 
 
 def validate_mirror_url(url: str) -> str:
@@ -54,9 +58,28 @@ def validate_mirror_url(url: str) -> str:
     return url
 
 
+def release_change_allowed(installed_release: str, target_release: str) -> bool:
+    """Fail closed unless both releases are known, numeric and identical."""
+    return (
+        isinstance(installed_release, str)
+        and isinstance(target_release, str)
+        and bool(re.fullmatch(r"[0-9]{1,3}", installed_release))
+        and installed_release == target_release
+    )
+
+
 def build_change_plan(repo_id: str, current_url: str, proposed_url: str,
-                      source_file: str) -> ChangePlan:
+                      source_file: str, *, target_release: str,
+                      installed_release: str | None = None) -> ChangePlan:
     """Describe a change, without writing a file or granting permissions."""
+    installed = _version() if installed_release is None else installed_release
+    if not release_change_allowed(installed, target_release):
+        raise ValueError(
+            f"Release mismatch: installed Fedora {installed}, diagnostic Fedora "
+            f"{target_release}. Diagnostics are permitted, but configuration "
+            "changes for another release are blocked. Use Fedora's official "
+            "system-upgrade procedure."
+        )
     if not _REPO_ID.fullmatch(repo_id) or repo_id not in ALLOWED_REPOS:
         raise ValueError("Only Fedora release and updates are supported")
     proposed = validate_mirror_url(proposed_url)
@@ -71,6 +94,7 @@ def build_change_plan(repo_id: str, current_url: str, proposed_url: str,
         repo_id=repo_id, current_url=current_url or "(not configured)",
         proposed_url=proposed, source_file=source_file,
         target_file=str(OVERRIDE_PATH), preview=preview,
+        installed_release=installed, target_release=target_release,
         warnings=(
             "Preview only: nothing has been written or backed up.",
             "A privileged helper must verify DNF5 precedence and the exact existing override before applying.",
