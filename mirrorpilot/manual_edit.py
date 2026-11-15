@@ -13,33 +13,28 @@ class ManualEdit:
 
 
 def prepare_manual_edit(plan: ChangePlan) -> ManualEdit:
-    """Produce section-scoped values, never a replacement for an entire .repo file.
-
-    A user must inspect effective DNF5 configuration and competing overrides.
-    """
-    snippet = (
-        f"[{plan.repo_id}]\n"
-        f"baseurl={plan.proposed_url}\n"
-        "metalink=\n"
-        "mirrorlist=\n"
+    """Provide a copyable DNF5 command; the user runs it, not MirrorPilot."""
+    command = (
+        f"sudo dnf5 config-manager setopt "
+        f"{plan.repo_id}.baseurl={plan.proposed_url} "
+        f"{plan.repo_id}.metalink= "
+        f"{plan.repo_id}.mirrorlist="
     )
     instructions = (
-        f"Edit the existing [{plan.repo_id}] section in:\n"
-        f"{plan.source_file}\n\n"
-        "Copy only the setting lines into the existing section. Do NOT append "
-        "a second section header, overwrite the entire file, or paste this "
-        "block into a terminal. The header is shown only for context.\n\n"
-        "1. Back up the file yourself before editing.\n"
-        "2. Inspect Configuration origins for overrides and competing definitions. "
-        "If an override takes precedence, editing this source file may have no effect.\n"
-        "3. Replace the existing baseurl with the suggested URL; clear or comment "
-        "out metalink and mirrorlist in that same section. Preserve all other keys.\n"
-        "4. Save in your editor with administrator privileges if necessary, "
-        "then use Verify effective settings here.\n"
-        "5. If verification fails, restore your backup or inspect the effective "
-        "DNF5 configuration. MirrorPilot never writes these files."
+        f"Repository: {plan.repo_id}\\n"
+        f"Source file (for reference only): {plan.source_file}\\n"
+        f"DNF5-managed override: {plan.target_file}\\n\\n"
+        "DNF5 config-manager is the recommended method. Do not edit the "
+        "distribution's .repo file or the managed override by hand.\\n\\n"
+        "1. Inspect Configuration origins for existing overrides and conflicts.\\n"
+        "2. Review the exact command below and make your own backup if needed.\\n"
+        "3. Copy the command and run it yourself in a terminal. It requires "
+        "administrator privileges; MirrorPilot does not execute it.\\n"
+        "4. Click Verify effective settings to compare DNF5-reported values.\\n"
+        "5. If verification fails, inspect overrides and correct the configuration "
+        "using DNF5 config-manager. This is not an automatic rollback."
     )
-    return ManualEdit(plan.source_file, snippet, instructions)
+    return ManualEdit(plan.target_file, command, instructions)
 
 
 def verify_effective_values(plan: ChangePlan, values: dict[str, str]) -> tuple[bool, str]:
