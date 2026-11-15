@@ -6,61 +6,73 @@ def _xml(*urls):
             "".join(f"<url>{u}</url>" for u in urls) +
             "</resources></file></files></metalink>").encode()
 
-def test_country_list_and_repo(monkeypatch):
-    seen = []
-    def fake(url, limit, ranged=False):
-        seen.append(url)
-        return _xml("https://mirrors.xtom.ee/fedora/repodata/repomd.xml")
+def _registry(*rows):
+    return ("<table><tbody>" + "".join(
+        f"<tr><td>{country}</td><td>Operator</td><td>{host}</td><td>Fedora Linux</td></tr>"
+        for country, host in rows) + "</tbody></table>").encode()
+
+def test_registry_maps_country_without_hardcoded_hosts():
+    result = speed.parse_inventory(_registry(("EE", "mirrors.xtom.ee"), ("DE", "mirror.dogado.de")))
+    assert result == {"mirrors.xtom.ee": "EE", "mirror.dogado.de": "DE"}
+
+def test_conflicting_country_fails_closed():
+    assert "mirror.example" not in speed.parse_inventory(
+        _registry(("DE", "mirror.example"), ("RU", "mirror.example")))
+
+def test_discovery_uses_both_sources_and_rejects_ru(monkeypatch):
+    calls = []
+    def fake(url, limit):
+        calls.append(url)
+        if "metalink?" in url:
+            return _xml("https://mirror.yandex.ru/fedora/repodata/repomd.xml",
+                        "https://mirrors.xtom.ee/fedora/repodata/repomd.xml",
+                        "https://mirror.dogado.de/fedora/repodata/repomd.xml")
+        return _registry(("RU", "mirror.yandex.ru"), ("EE", "mirrors.xtom.ee"),
+                         ("DE", "mirror.dogado.de"))
     monkeypatch.setattr(speed, "_download", fake)
-    assert speed.discover("45") == ["https://mirrors.xtom.ee/fedora/"]
-    assert "country=FI%2CSE%2CEE%2CDE%2CNL%2CDK" in seen[0]
-    assert "fedora-45" in seen[0]
+    assert speed.discover("45") == [
+        ("https://mirrors.xtom.ee/fedora/", "EE"),
+        ("https://mirror.dogado.de/fedora/", "DE"),
+    ]
+    assert len(calls) == 2
+    assert "country=FI%2CSE%2CEE%2CDE%2CNL%2CDK" in calls[0]
+    assert "page_size=500" in calls[1]
 
-def test_forbidden_yandex_never_selected():
+def test_metalink_rejects_unsafe_urls():
     assert speed.parse_metalink(_xml(
-        "https://mirror.yandex.ru/fedora/repodata/repomd.xml",
-        "https://mirror.dogado.de/fedora/repodata/repomd.xml"
-    )) == ["https://mirror.dogado.de/fedora/"]
+        "http://bad.example/r/repodata/repomd.xml",
+        "https://user:pass@bad.example/r/repodata/repomd.xml",
+        "https://ok.example/r/repodata/repomd.xml"
+    )) == ["https://ok.example/r/"]
 
-def test_reject_lookalike_and_credentials():
-    assert speed.parse_metalink(_xml(
-        "https://mirror.dogado.de.evil.example/fedora/repodata/repomd.xml",
-        "https://user:password@mirror.dogado.de/fedora/repodata/repomd.xml",
-        "http://mirror.dogado.de/fedora/repodata/repomd.xml"
-    )) == []
-
-def test_limit():
-    with pytest.raises(ValueError):
-        speed.parse_metalink(_xml(), 9)
-
-def test_bad_repo():
+def test_reject_bad_repo():
     with pytest.raises(ValueError):
         speed.discover("45", "rpmfusion")
 
-def test_probe_never_connects_to_blocked_host(monkeypatch):
-    def forbidden(*args, **kwargs):
-        raise AssertionError("network called for blocked host")
-    monkeypatch.setattr(speed, "_download", forbidden)
-    monkeypatch.setattr(speed, "_transfer", forbidden)
-    assert speed.probe("https://mirror.yandex.ru/fedora/").status == "blocked"
-
-def test_sample_path():
+def test_primary_sample_path():
     data = (b'<repomd xmlns="http://linux.duke.edu/metadata/repo">'
             b'<data type="primary"><location href="repodata/primary.xml.zck"/></data>'
             b'</repomd>')
     assert speed._sample_path(data) == "repodata/primary.xml.zck"
 
-def test_probe_uses_large_sample(monkeypatch):
-    data = (b'<repomd xmlns="http://linux.duke.edu/metadata/repo">'
-            b'<data type="primary"><location href="repodata/primary.xml.zck"/></data>'
-            b'</repomd>')
+def test_three_samples_median(monkeypatch):
+    index = (b'<repomd xmlns="http://linux.duke.edu/metadata/repo">'
+             b'<data type="primary"><location href="repodata/primary.xml.zck"/></data>'
+             b'</repomd>')
+    monkeypatch.setattr(speed, "_download", lambda url, limit: index)
+    values = iter([(10, 20, 100), (20, 200, 100), (30, 50, 100)])
     seen = []
-    monkeypatch.setattr(speed, "_download", lambda url, limit: data)
-    def transfer(url):
+    def fake_transfer(url):
         seen.append(url)
-        return 12.5, 120.0, speed.SAMPLE_BYTES
-    monkeypatch.setattr(speed, "_transfer", transfer)
-    result = speed.probe("https://mirror.dogado.de/fedora/")
-    assert result.status == "measured"
-    assert result.mbps == 120.0
-    assert seen == ["https://mirror.dogado.de/fedora/repodata/primary.xml.zck"]
+        return next(values)
+    monkeypatch.setattr(speed, "_transfer", fake_transfer)
+    result = speed.probe("https://example.org/repo/", "EE")
+    assert result.mbps == 50
+    assert result.ttfb_ms == 20
+    assert len(seen) == 3
+    assert all(url.endswith("/repodata/primary.xml.zck") for url in seen)
+
+def test_no_unapproved_probes(monkeypatch):
+    monkeypatch.setattr(speed, "discover", lambda *args: [])
+    monkeypatch.setattr(speed, "probe", lambda *args: pytest.fail("unexpected probe"))
+    assert speed.benchmark("45") == []
