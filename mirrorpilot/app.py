@@ -8,7 +8,7 @@ from PySide6.QtGui import QColor, QBrush
 from PySide6.QtWidgets import (
     QApplication, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow,
     QMessageBox, QPushButton, QTableWidget, QTableWidgetItem, QTextEdit,
-    QVBoxLayout, QWidget, QAbstractItemView, QComboBox,
+    QVBoxLayout, QWidget, QAbstractItemView, QComboBox, QToolButton,
 )
 from mirrorpilot.check import check_baseurl
 from mirrorpilot.repos import get_repositories, _version
@@ -59,19 +59,36 @@ class MainWindow(QMainWindow):
         self.version.addItem(f"Fedora {_version()} — installed", _version())
         self.version.currentIndexChanged.connect(self.load_repos)
         toolbar.addWidget(self.version)
-        self.refresh_button = QPushButton("Load repositories")
+        toolbar.addWidget(QLabel("Repository:"))
+        self.repo_choice = QComboBox()
+        self.repo_choice.addItem("Fedora release (Everything)", "fedora")
+        self.repo_choice.addItem("Fedora updates", "updates")
+        toolbar.addWidget(self.repo_choice)
+        toolbar.addStretch()
+        self.refresh_button = QToolButton()
+        self.refresh_button.setText("↻")
+        self.refresh_button.setToolTip("Reload configured repositories from disk (read-only)")
         self.refresh_button.clicked.connect(self.load_repos)
         toolbar.addWidget(self.refresh_button)
         layout.addLayout(toolbar)
 
-        repo_options = QHBoxLayout()
-        repo_options.addWidget(QLabel("Repository to diagnose:"))
-        self.repo_choice = QComboBox()
-        self.repo_choice.addItem("Fedora release (Everything)", "fedora")
-        self.repo_choice.addItem("Fedora updates", "updates")
-        repo_options.addWidget(self.repo_choice)
-        repo_options.addStretch()
-        layout.addLayout(repo_options)
+        actions = QHBoxLayout()
+        self.current_label = "Check current"
+        self.current_button = QPushButton(self.current_label)
+        self.current_button.setToolTip("Check availability, Fedora reference index and metadata of the configured source. No speed benchmark; may download large metadata files.")
+        self.current_button.clicked.connect(self.start_current_check)
+        actions.addWidget(self.current_button)
+        self.scan_label = "Find better mirrors"
+        self.scan_button = QPushButton(self.scan_label)
+        self.scan_button.setToolTip("Discover and benchmark up to 8 country-approved mirrors; check indexes and verify metadata on the fastest matching mirror. Read-only.")
+        self.scan_button.clicked.connect(self.start_scan)
+        actions.addWidget(self.scan_button)
+        self.check_button = QPushButton("Check selected (advanced)")
+        self.check_button.setToolTip("Check the HTTPS base URL of the selected row in Configured repositories. Requires a concrete URL.")
+        self.check_button.setEnabled(False)
+        self.check_button.clicked.connect(self.check_selected)
+        actions.addWidget(self.check_button)
+        layout.addLayout(actions)
         layout.addWidget(QLabel("Configured repositories"))
         self.table = QTableWidget(0, 4)
         self.table.setHorizontalHeaderLabels(["Repository", "Status", "Effective source", "Config file"])
@@ -91,20 +108,7 @@ class MainWindow(QMainWindow):
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setMaximumHeight(155)
         layout.addWidget(self.table)
-        self.check_button = QPushButton("Check selected repository URL (advanced)")
-        self.check_button.setEnabled(False)
-        self.check_button.clicked.connect(self.check_selected)
         self.table.itemSelectionChanged.connect(self.selection_changed)
-        layout.addWidget(self.check_button)
-
-        self.current_label = "Check current repository (availability and metadata)"
-        self.current_button = QPushButton(self.current_label)
-        self.current_button.clicked.connect(self.start_current_check)
-        layout.addWidget(self.current_button)
-        self.scan_label = "Find better mirrors (up to 8; compare speed and integrity)"
-        self.scan_button = QPushButton(self.scan_label)
-        self.scan_button.clicked.connect(self.start_scan)
-        layout.addWidget(self.scan_button)
         self.summary = QLabel("Not checked. Speed alone does not establish repository health.")
         layout.addWidget(self.summary)
 
@@ -129,12 +133,14 @@ class MainWindow(QMainWindow):
         self.verify_button = QPushButton("Verify selected mirror metadata (optional; up to 512 MiB/file)")
         self.verify_button.setEnabled(False)
         self.verify_button.clicked.connect(self.verify_selected)
-        layout.addWidget(self.verify_button)
         layout.addWidget(QLabel("Details (select a mirror to inspect errors and checks)"))
         self.details = QTextEdit()
         self.details.setReadOnly(True)
         self.details.setMaximumHeight(105)
         layout.addWidget(self.details)
+        self.verify_button.setText("Verify selected metadata")
+        self.verify_button.setToolTip("Verify up to 3 referenced metadata files for the selected mirror (up to 512 MiB each). Read-only.")
+        layout.addWidget(self.verify_button)
         layout.addWidget(QLabel("Read-only: no DNF settings, packages or caches are modified."))
         self.setCentralWidget(main)
         self.statusBar().showMessage("Ready")
@@ -361,7 +367,7 @@ class MainWindow(QMainWindow):
         self.running = False
         self.scan_button.setEnabled(True)
         self.current_button.setEnabled(True)
-        self.verify_button.setText("Verify selected mirror metadata (optional; up to 512 MiB/file)")
+        self.verify_button.setText("Verify selected metadata")
         if error:
             self.details.setPlainText("Verification failed: " + error)
         else:
