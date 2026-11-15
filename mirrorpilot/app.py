@@ -20,6 +20,7 @@ from mirrorpilot.summary import summary_lines
 from mirrorpilot.changes import build_change_plan, format_change_plan, release_change_allowed
 from mirrorpilot.polkit_probe import parse_probe_response
 from mirrorpilot.config_conflicts import inspect_configuration, format_config_report
+from mirrorpilot.dnf_effective import read_effective_config, format_effective_comparison
 
 class Worker(QObject):
     finished = Signal(object, object)
@@ -231,15 +232,19 @@ class MainWindow(QMainWindow):
         dialog.resize(840, 580)
         dialog.setMinimumSize(480, 300)
         content = QVBoxLayout(dialog)
-        explanation = QLabel(
-            "File-level definitions and potential conflicts. "
-            "Effective DNF5 precedence has not yet been verified."
-        )
+        try:
+            effective = read_effective_config(repo_id)
+            diagnostic = format_effective_comparison(report, effective)
+            intro = "DNF5 effective values are shown first; file origins follow."
+        except (RuntimeError, ValueError) as exc:
+            diagnostic = f"DNF5 effective configuration unavailable: {exc}"
+            intro = "File-level evidence only; DNF5 effective configuration unavailable."
+        explanation = QLabel(intro)
         explanation.setWordWrap(True)
         content.addWidget(explanation)
         details = QTextEdit(dialog)
         details.setReadOnly(True)
-        details.setPlainText(format_config_report(report))
+        details.setPlainText(diagnostic + "\n\n" + format_config_report(report))
         details.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
         content.addWidget(details, 1)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, parent=dialog)
