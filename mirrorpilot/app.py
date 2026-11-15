@@ -446,7 +446,7 @@ class MainWindow(QMainWindow):
             )
             return
         try:
-            plan = build_change_plan(configured.repo_id, configured.baseurl,
+            plan = build_change_plan(configured.repo_id, configured.raw_baseurl,
                                      entry.speed.url, configured.filename,
                                      target_release=target)
         except ValueError as exc:
