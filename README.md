@@ -69,3 +69,7 @@ After a benchmark, select one mirror row and choose **Audit selected mirror inde
 ## Referenced metadata verification (experimental)
 
 After benchmarking, select a mirror and click **Verify referenced metadata**. This separate opt-in read-only check fetches the selected mirror's `repomd.xml` and up to three referenced `primary`, `filelists` and `other` metadata files, each limited to 32 MiB. It validates SHA-256/SHA-512 digests and distinguishes missing HTTP resources, checksum mismatch and size limits. Large metadata files are reported as `too-large` (inconclusive), not corrupt. The audit does not check every metadata type, signatures or repository freshness, and does not modify DNF caches or configuration. Use the index audit separately to compare with Fedora's current metalink reference.
+
+## Streaming metadata verification
+
+The referenced-metadata check now streams SHA-256/SHA-512 over 256 KiB chunks rather than loading each entire file into RAM. The safety cap is 512 MiB **per file**, with a 12-second network operation timeout and a 120-second elapsed-time check between reads. It compares the compressed file size with the optional `repomd.xml` declared size and shows file number, name and downloaded MiB on the button. The cap prevents excessive transfers; large files are not automatically treated as corrupt. A blocking network read may exceed the elapsed-time limit until its socket timeout fires. This is a read-only check; no DNF files or caches are modified.
