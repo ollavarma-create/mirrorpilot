@@ -37,6 +37,8 @@ class MirrorResult:
     mbps: float | None
     bytes_read: int
     detail: str
+    min_mbps: float | None = None
+    max_mbps: float | None = None
 
 
 class _InventoryParser(HTMLParser):
@@ -136,13 +138,22 @@ def discover(release: str, repo: str = "fedora") -> list[tuple[str, str]]:
     metalink = _download("https://mirrors.fedoraproject.org/metalink?" + query, MAX_LIST)
     # Registry is authoritative for registered country; no hostname heuristics.
     registry = parse_inventory(_download(REGISTRY_URL, MAX_REGISTRY))
-    selected = []
+    buckets = {country: [] for country in COUNTRIES}
     for base in parse_metalink(metalink):
         host = urlsplit(base).hostname or ""
         country = registry.get(host.lower())
-        if country in COUNTRIES:
-            selected.append((base, country))
-        if len(selected) >= MAX_MIRRORS:
+        if country in buckets:
+            buckets[country].append((base, country))
+    # Round-robin preserves MirrorManager order within each country while
+    # preventing the first country's mirrors from filling all eight slots.
+    selected = []
+    while len(selected) < MAX_MIRRORS:
+        added = False
+        for country in COUNTRIES:
+            if buckets[country] and len(selected) < MAX_MIRRORS:
+                selected.append(buckets[country].pop(0))
+                added = True
+        if not added:
             break
     return selected
 
@@ -199,7 +210,9 @@ def probe(base: str, country: str) -> MirrorResult:
                             round(median(m[0] for m in measurements), 1),
                             round(median(m[1] for m in measurements), 2),
                             int(median(m[2] for m in measurements)),
-                            "Median of 3 bounded transfers; integrity/freshness not checked")
+                            "Median of 3 bounded transfers; integrity/freshness not checked",
+                            round(min(m[1] for m in measurements), 2),
+                            round(max(m[1] for m in measurements), 2))
     except (HTTPError, URLError, TimeoutError, OSError, ValueError, RuntimeError, ET.ParseError) as exc:
         return MirrorResult(base, country, "error", None, None, 0, str(exc))
 
