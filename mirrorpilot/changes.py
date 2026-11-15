@@ -1,4 +1,4 @@
-"""Read-only change planning for a future privileged DNF5 helper.
+"""Read-only change planning for user-managed DNF5 configuration.
 
 This module never writes to system paths. Preview targets are *not* an
 authorization to write: a future privileged helper must independently
@@ -99,8 +99,8 @@ def build_change_plan(repo_id: str, current_url: str, proposed_url: str,
         warnings=(
             "Preview only: nothing has been written or backed up.",
             "DNF5 config-manager owns the override; no competing MirrorPilot fragment is created.",
-            "A privileged helper must snapshot and verify the existing config-manager override before applying.",
-            "Backup, authorization, durable journaling, effective-value validation and safe rollback are required before enabling Apply; DNF5 writes are not assumed atomic.",
+            "Inspect configuration origins before editing: another override may take precedence.",
+            "Back up the file manually, edit the existing repository section, then verify DNF5 effective settings.",
         ),
     )
 
