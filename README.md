@@ -215,3 +215,23 @@ trusted inputs and filesystem boundaries, implement durable pre-write recovery,
 and verify effective DNF5 values before any writes are enabled. The
 argument vector is **not** a shell command and must never be executed through
 a shell. The existing sandbox recovery experiment is not a production writer.
+
+## Restart-recovery regression suite (sandbox only)
+
+```bash
+python -m pytest tests/test_dnf_restart_recovery.py -v
+python -m pytest -q
+```
+
+The sandbox transaction now optionally stores an independently predicted
+SHA-256 in the durable `PREPARED` journal **before** launching its confined
+writer. A fresh Python interpreter can recover the original bytes if the
+interrupted output exactly matches the prediction. Unknown, partially written,
+or third-party-modified contents are left untouched for manual review.
+Legacy journals without a prediction remain conservative.
+
+**Not a production recovery guarantee:** predicting the DNF5 output requires
+an isolated fixture and independent verification; file permissions, ownership,
+ACLs, SELinux labels, symlink-safe paths, locking, journal integrity, power-loss
+durability, and privileged execution remain separate work. No host settings
+are changed by this suite.
