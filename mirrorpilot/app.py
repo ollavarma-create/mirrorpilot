@@ -110,7 +110,16 @@ class MainWindow(QMainWindow):
 
         self.mirrors = QTableWidget(0, 6)
         self.mirrors.setHorizontalHeaderLabels(["Country", "Mirror", "Mbit/s", "Range", "Health", "Index / Metadata"])
-        self.mirrors.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        # Do not stretch the Mirror column: it prevents users from dragging
+        # its right edge and can hide the Index / Metadata column.
+        mirror_header = self.mirrors.horizontalHeader()
+        mirror_header.setStretchLastSection(False)
+        mirror_header.setSectionsMovable(True)
+        for col in range(6):
+            mirror_header.setSectionResizeMode(col, QHeaderView.ResizeMode.Interactive)
+        for col, width in enumerate((105, 420, 85, 110, 125, 190)):
+            self.mirrors.setColumnWidth(col, width)
+        self.mirrors.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.mirrors.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.mirrors.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.mirrors.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
