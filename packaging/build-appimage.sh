@@ -15,6 +15,8 @@ APPDIR="$ROOT/dist/MirrorPilot.AppDir"
 mkdir -p "$APPDIR/usr/bin" "$APPDIR/usr/share/icons/hicolor/scalable/apps"
 cp -a "$ROOT/dist/mirrorpilot/." "$APPDIR/usr/bin/"
 cp "$ROOT/packaging/mirrorpilot.desktop" "$APPDIR/mirrorpilot.desktop"
+mkdir -p "$APPDIR/usr/share/metainfo"
+cp "$ROOT/packaging/mirrorpilot.appdata.xml" "$APPDIR/usr/share/metainfo/mirrorpilot.appdata.xml"
 cp "$ROOT/assets/mirrorpilot.svg" "$APPDIR/mirrorpilot.svg"
 if ! command -v rsvg-convert >/dev/null 2>&1; then
   echo "rsvg-convert is required to generate the AppImage PNG icon (install librsvg2-bin)." >&2
