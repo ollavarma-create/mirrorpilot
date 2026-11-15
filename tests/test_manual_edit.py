@@ -12,15 +12,18 @@ def plan():
     )
 
 
-def test_manual_snippet_is_section_scoped_and_preserves_other_settings():
+def test_manual_command_uses_dnf5_config_manager():
     manual = prepare_manual_edit(plan())
-    assert manual.file_path == "/etc/yum.repos.d/fedora-updates.repo"
-    assert manual.snippet == (
-        "[updates]\nbaseurl=https://new.example.org/updates/45/\n"
-        "metalink=\nmirrorlist=\n"
+    assert manual.file_path == "/etc/dnf/repos.override.d/99_config_manager.repo" or (
+        manual.file_path == "/etc/dnf/repos.override.d/99-config_manager.repo"
     )
-    assert "Do NOT append" in manual.instructions
-    assert "override" in manual.instructions.lower()
+    assert manual.snippet == (
+        "sudo dnf5 config-manager setopt "
+        "updates.baseurl=https://new.example.org/updates/45/ "
+        "updates.metalink= updates.mirrorlist="
+    )
+    assert "do not edit" in manual.instructions.lower()
+    assert "MirrorPilot does not execute it" in manual.instructions
 
 
 def test_effective_settings_match_only_with_no_competing_metalink():
