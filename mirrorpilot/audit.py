@@ -40,7 +40,7 @@ def audit(base: str, country: str, release: str, repo: str = "fedora") -> AuditR
 
     No package installation, DNF cache access, or configuration modification.
     """
-    if country not in COUNTRIES or not release.isdigit() or len(release) > 3:
+    if country not in (*COUNTRIES, "Configured") or not release.isdigit() or len(release) > 3:
         return AuditResult("unsupported", "Invalid country or release", base)
     if repo not in ("fedora", "updates"):
         return AuditResult("unsupported", "Unsupported repository", base)
