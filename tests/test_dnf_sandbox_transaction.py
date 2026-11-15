@@ -62,3 +62,36 @@ def test_prepared_unchanged_clears_journal(sandbox):
               "before_sha256": digest(b"old"), "after_sha256": None})
     assert tx.recover() == "already-original"
     assert not tx.journal.exists()
+
+
+def test_interruption_after_prepared_leaves_recoverable_journal(sandbox):
+    tx = SandboxDNFTransaction(sandbox)
+    tx.tx.target.write_bytes(b"old")
+    def interrupt(stage):
+        if stage == "PREPARED":
+            raise KeyboardInterrupt("simulated process interruption")
+    with pytest.raises(KeyboardInterrupt):
+        tx.apply(["bwrap", "--ro-bind", "/", "/", "--", "dnf5"],
+                 lambda: True, checkpoint=interrupt)
+    assert tx.journal.exists()
+    assert tx.recover() == "already-original"
+    assert tx.tx.target.read_bytes() == b"old"
+
+
+def test_interruption_after_applied_restores_exact_backup(sandbox, monkeypatch):
+    import subprocess
+    tx = SandboxDNFTransaction(sandbox)
+    tx.tx.target.write_bytes(b"# original\\n")
+    def simulated_dnf(command, **kwargs):
+        tx.tx.target.write_bytes(b"# DNF5 changed\\n")
+        return subprocess.CompletedProcess(command, 0, "", "")
+    monkeypatch.setattr(subprocess, "run", simulated_dnf)
+    def interrupt(stage):
+        if stage == "APPLIED":
+            raise KeyboardInterrupt("simulated process interruption")
+    with pytest.raises(KeyboardInterrupt):
+        tx.apply(["bwrap", "--ro-bind", "/", "/", "--", "dnf5"],
+                 lambda: True, checkpoint=interrupt)
+    assert tx.journal.exists()
+    assert tx.recover() == "restored"
+    assert tx.tx.target.read_bytes() == b"# original\\n"
