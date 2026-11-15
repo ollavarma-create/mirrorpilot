@@ -77,3 +77,29 @@ def test_gui_worker_positional_args_with_keyword_progress(monkeypatch):
     result = d.run_diagnostics("45", 1, "updates", progress=lambda *args: events.append(args))
     assert result == []
     assert events == []
+
+def test_index_timeout_does_not_abort_other_mirrors(monkeypatch):
+    monkeypatch.setattr(d, "benchmark", lambda release, repo, progress: [
+        speed("https://slow/", 200), speed("https://good/", 100)])
+    def index(base, country, release, repo):
+        if "slow" in base:
+            raise TimeoutError("The read operation timed out")
+        return check("index-match")
+    monkeypatch.setattr(d, "audit", index)
+    monkeypatch.setattr(d, "audit_referenced", lambda *args, **kwargs: check("metadata-match"))
+    rows = d.run_diagnostics("45", repo="updates")
+    assert rows[0].health == "uncertain"
+    assert rows[0].index.status == "timeout"
+    assert rows[1].health == "verified"
+    assert d.fastest_verified(rows) is rows[1]
+
+def test_metadata_timeout_keeps_index_results(monkeypatch):
+    monkeypatch.setattr(d, "benchmark", lambda release, repo, progress: [speed("https://slow/", 200)])
+    monkeypatch.setattr(d, "audit", lambda *args, **kwargs: check("index-match"))
+    def fail(*args, **kwargs):
+        raise TimeoutError("The read operation timed out")
+    monkeypatch.setattr(d, "audit_referenced", fail)
+    rows = d.run_diagnostics("45", repo="updates")
+    assert rows[0].index.status == "index-match"
+    assert rows[0].metadata.status == "error"
+    assert rows[0].health == "uncertain"
