@@ -235,3 +235,22 @@ an isolated fixture and independent verification; file permissions, ownership,
 ACLs, SELinux labels, symlink-safe paths, locking, journal integrity, power-loss
 durability, and privileged execution remain separate work. No host settings
 are changed by this suite.
+
+## Filesystem identity threat-model tests (read-only)
+
+```bash
+python -m pytest tests/test_fs_identity_probe.py -v
+python -m pytest -q
+```
+
+The probe uses Linux `open` with `O_NOFOLLOW`, `O_DIRECTORY`,
+directory-relative `dir_fd`, and `fstat` to detect inode or directory
+replacement between observations. Tests cover same-content atomic replacement,
+directory swaps, symlinks, hardlinks, FIFO and invalid basenames.
+
+**Important limitations:** These are observational tests, not an atomic
+filesystem guard. The probe does not pin or validate every parent directory,
+verify trusted ownership, prevent post-check replacement, or constrain the
+external DNF5 writer. In particular, no preflight inode check alone closes
+the TOCTOU window when DNF5 subsequently opens a pathname. Do not use the
+probe to authorize a production write. The production helper remains blocked.
