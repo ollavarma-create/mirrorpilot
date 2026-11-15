@@ -29,3 +29,29 @@ def test_release_repo_template():
 def test_unknown_layout_fails_closed(url):
     with pytest.raises(ValueError, match="expected Fedora repository layout"):
         persistent_mirror_url("updates", url, "44")
+
+
+def test_same_mirror_fixed_release_is_upgradable():
+    url = "https://mirror.23m.com/fedora/linux/updates/44/Everything/x86_64/"
+    plan = build_change_plan(
+        "updates", url, url, "/etc/yum.repos.d/fedora-updates.repo",
+        target_release="44", installed_release="44"
+    )
+    assert "$releasever" in plan.preview
+    assert "$basearch" in plan.preview
+
+
+def test_same_mirror_variable_setting_is_noop():
+    url = "https://mirror.23m.com/fedora/linux/updates/44/Everything/x86_64/"
+    template = persistent_mirror_url("updates", url, "44")
+    with pytest.raises(ValueError, match="already configured"):
+        build_change_plan(
+            "updates", template, url, "/etc/yum.repos.d/fedora-updates.repo",
+            target_release="44", installed_release="44"
+        )
+
+
+def test_configured_source_is_not_misreported_as_missing():
+    from mirrorpilot.summary import summary_lines
+    lines = summary_lines([], "44", "updates", configured_url="https://example.org/")
+    assert "configured HTTPS URL detected; not tested" in lines[0]
