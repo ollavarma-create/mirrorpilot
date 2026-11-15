@@ -5,6 +5,7 @@ No sudo, no real /etc writes. Does not prove atomicity under arbitrary crashes.
 """
 from __future__ import annotations
 
+import argparse
 import difflib
 import hashlib
 import os
@@ -30,12 +31,15 @@ def inspect(path: Path) -> dict:
     }
 
 
-def run() -> int:
+def run(*, trace: bool = False) -> int:
     if os.geteuid() == 0:
         print("REFUSED: never run as root or with sudo")
         return 2
     if not shutil.which("bwrap") or not shutil.which("dnf5"):
         print("INCONCLUSIVE: requires bwrap and dnf5")
+        return 2
+    if trace and not shutil.which("strace"):
+        print("INCONCLUSIVE: strace is not installed")
         return 2
     with tempfile.TemporaryDirectory(prefix="mirrorpilot-dnf-observe-") as temp:
         root = Path(temp)
@@ -73,6 +77,18 @@ def run() -> int:
             "fedora.baseurl=https://new.example.org/fedora/",
             "fedora.metalink=",
         ]
+        tracefile = root / "syscalls.log"
+        if trace:
+            # Trace the actual DNF5 child through bwrap. -yy annotates file
+            # descriptors, making write(fd<...>) attributable to the target.
+            command = [
+                "strace", "-f", "-yy", "-s", "160",
+                "-e", "trace=open,openat,openat2,creat,write,writev,pwrite64,"
+                "ftruncate,truncate,rename,renameat,renameat2,unlink,unlinkat,"
+                "fsync,fdatasync,close",
+                "-o", str(tracefile), "--",
+                *command,
+            ]
         try:
             result = subprocess.run(command, capture_output=True, text=True, timeout=30)
         except (OSError, subprocess.TimeoutExpired) as exc:
@@ -81,6 +97,22 @@ def run() -> int:
         print("DNF5 return code:", result.returncode)
         if result.stderr:
             print("stderr:", result.stderr[:1500])
+        if trace and tracefile.exists():
+            lines = tracefile.read_text(errors="replace").splitlines()
+            # Output only operations referring to the isolated DNF target.
+            # strace -yy annotates fds, including write/close/ftruncate.
+            selected = [
+                line for line in lines
+                if "99_config_manager.repo" in line
+                or "repos.override.d/" in line
+            ]
+            print("TRACE: target-related syscalls (max 100):")
+            for line in selected[:100]:
+                print(line.replace(str(root), "<SANDBOX>"))
+            if len(selected) > 100:
+                print(f"TRACE: omitted {len(selected) - 100} additional lines")
+            if not selected:
+                print("TRACE: no target-related syscalls captured; inconclusive")
         if result.returncode:
             return 2
         if not target.exists() or target.is_symlink():
@@ -105,9 +137,17 @@ def run() -> int:
             return 1
         print("PASS: observed one completed sandbox DNF5 write.")
         print("NOTE: inode equality alone does not prove in-place writes or atomicity.")
-        print("NOTE: this experiment does not interrupt a write or trace syscalls.")
+        if trace:
+            print("NOTE: strace shows observed syscalls, not power-loss durability.")
+            print("NOTE: absence of fsync in a filtered trace is not proof of no durability.")
+        else:
+            print("NOTE: use --trace to inspect actual syscalls.")
         return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(run())
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--trace", action="store_true",
+                        help="Trace sandbox DNF5 file operations with strace")
+    args = parser.parse_args()
+    raise SystemExit(run(trace=args.trace))
