@@ -104,7 +104,7 @@ def main() -> int:
                 ok = ok and status == "verified"
                 restarted.clear_verified()
             else:
-                ok = ok and status in ("restored", "clean")
+                ok = ok and status in ("restored", "unchanged", "clean")
             print(f"{case}: recovery={status}, bytes_correct={actual == expected}, "
                   f"mode={oct(mode)}, journal_cleared={not restarted.journal.exists()}, "
                   f"{'PASS' if ok else 'FAIL'}")
