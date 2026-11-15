@@ -105,7 +105,7 @@ def test_metadata_timeout_keeps_index_results(monkeypatch):
     assert rows[0].health == "uncertain"
 
 def test_configured_source_checked_even_if_index_differs(monkeypatch):
-    monkeypatch.setattr(d, "probe", lambda base, country: speed(base, 70))
+    monkeypatch.setattr(d, "probe", lambda base, country: d.MirrorResult(base, country, "measured", 20, 70, 1024, "sample"))
     monkeypatch.setattr(d, "benchmark", lambda release, repo, progress: [speed("https://alternative/", 200)])
     monkeypatch.setattr(d, "audit", lambda base, country, release, repo:
                         check("different") if country == "Configured" else check("index-match"))
