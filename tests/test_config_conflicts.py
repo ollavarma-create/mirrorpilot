@@ -59,10 +59,7 @@ def test_other_repo_is_not_misattributed(tmp_path):
 
 def test_default_origins_include_fedora45_packaged_repos(tmp_path, monkeypatch):
     from mirrorpilot import repos
-    from mirrorpilot.config_conflicts import inspect_configuration
-    system_dir = tmp_path / "system"
-    local_dir = tmp_path / "local"
-    overrides = tmp_path / "overrides"
+    system_dir, local_dir, overrides = (tmp_path / name for name in ("system", "local", "overrides"))
     for directory in (system_dir, local_dir, overrides):
         directory.mkdir()
     (system_dir / "fedora.repo").write_text("[fedora]\nmetalink=https://example.org/list\n")
