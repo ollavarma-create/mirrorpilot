@@ -47,7 +47,7 @@ jobs:
           test -f dist/MirrorPilot.AppDir/mirrorpilot.svg
           test -s dist/MirrorPilot.AppDir/mirrorpilot.png
           test -e dist/MirrorPilot.AppDir/.DirIcon
-          test -s dist/MirrorPilot.AppDir/usr/share/metainfo/mirrorpilot.appdata.xml
+          test -s dist/MirrorPilot.AppDir/usr/share/metainfo/io.github.ollavarma_create.MirrorPilot.appdata.xml
       - name: Check artifact and checksum
         run: |
           test -s dist/SHA256SUMS
