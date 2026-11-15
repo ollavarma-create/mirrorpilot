@@ -440,11 +440,11 @@ class MainWindow(QMainWindow):
             return
         manual = prepare_manual_edit(plan)
         dialog = QDialog(self)
-        dialog.setWindowTitle("Manual DNF5 configuration — no automatic changes")
-        dialog.resize(820, 620)
+        dialog.setWindowTitle("DNF5 configuration command — copy and verify")
+        dialog.resize(820, 480)
         layout = QVBoxLayout(dialog)
         intro = QLabel(
-            f"Repository: {plan.repo_id} | DNF5 override: {manual.file_path}\\n"
+            f"Repository: {plan.repo_id} | DNF5 override: {manual.file_path}\n"
             "Review Configuration origins first: another DNF5 override may take precedence."
         )
         intro.setWordWrap(True)
@@ -452,12 +452,13 @@ class MainWindow(QMainWindow):
         instructions = QTextEdit(dialog)
         instructions.setReadOnly(True)
         instructions.setPlainText(manual.instructions)
-        layout.addWidget(instructions, 2)
+        instructions.setMaximumHeight(250)
+        layout.addWidget(instructions, 1)
         layout.addWidget(QLabel("Command to review and run yourself in a terminal:"))
         snippet = QTextEdit(dialog)
         snippet.setReadOnly(True)
         snippet.setPlainText(manual.snippet)
-        snippet.setMaximumHeight(140)
+        snippet.setMaximumHeight(85)
         layout.addWidget(snippet)
         buttons = QHBoxLayout()
         copy_button = QPushButton("Copy DNF5 command")
