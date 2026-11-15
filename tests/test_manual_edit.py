@@ -32,3 +32,10 @@ def test_effective_settings_match_only_with_no_competing_metalink():
     assert verify_effective_values(p, {"baseurl": expected, "metalink": "", "mirrorlist": ""})[0]
     assert not verify_effective_values(p, {"baseurl": expected, "metalink": "https://other.example.org/", "mirrorlist": ""})[0]
     assert not verify_effective_values(p, {"baseurl": "https://other.example.org/", "metalink": "", "mirrorlist": ""})[0]
+
+
+def test_instructions_contain_real_newlines_not_literal_escape_sequences():
+    manual = prepare_manual_edit(plan())
+    assert "\n" in manual.instructions
+    assert "\\n" not in manual.instructions
+    assert "1. Inspect" in manual.instructions.splitlines()
