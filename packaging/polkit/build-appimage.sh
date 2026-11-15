@@ -1,7 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cd "$(dirname "$0")/.."
-ROOT="$PWD"
+
+# Mene aina repon juureen (sieltä missä pyproject.toml on)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$SCRIPT_DIR" && while [[ ! -f pyproject.toml && "$PWD" != / ]]; do cd ..; done && pwd)"
+
+if [[ ! -f "$ROOT/pyproject.toml" ]]; then
+  echo "ERROR: pyproject.toml not found – cannot locate repo root" >&2
+  exit 1
+fi
+
+echo "ROOT=$ROOT"   # debug, voi poistaa myöhemmin
+cd "$ROOT"
 
 if [[ "$(uname -m)" != "x86_64" ]]; then
   echo "Only x86_64 is supported" >&2
@@ -11,7 +21,6 @@ fi
 VERSION="$(python -c 'import importlib.metadata; print(importlib.metadata.version("mirrorpilot"))')"
 mkdir -p dist
 
-# --- Nuitka standalone ---
 python -m nuitka \
   --standalone \
   --assume-yes-for-downloads \
