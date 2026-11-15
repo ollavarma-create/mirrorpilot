@@ -96,6 +96,56 @@ def main() -> int:
             print("FAIL: Fedora baseurl was not updated in sandbox override.")
             return 6
         print("PASS: sandbox override changed and updates baseurl preserved.")
+        print("\n=== rollback via setopt ===")
+        rollback = run(prefix + [
+            "config-manager", "setopt",
+            "fedora.baseurl=https://old.example.org/fedora/",
+            "fedora.metalink=",
+        ], env)
+        restored = override.read_bytes()
+        if rollback.returncode or restored != before:
+            print("FAIL: rollback did not reproduce the original file byte-for-byte.")
+            print("Original:", repr(before))
+            print("Restored:", repr(restored))
+            return 7
+        print("PASS: rollback restored the original file byte-for-byte.")
+
+        print("\n=== unsetopt removes only Fedora overrides ===")
+        unset = run(prefix + [
+            "config-manager", "unsetopt", "fedora.baseurl", "fedora.metalink",
+        ], env)
+        unset_bytes = override.read_bytes()
+        unset_text = unset_bytes.decode(errors="replace")
+        print("Override after unsetopt:\n", unset_text)
+        if unset.returncode:
+            print("INCONCLUSIVE: unsetopt command failed.")
+            return 8
+        if "[updates]" not in unset_text or original_updates not in unset_text:
+            print("FAIL: updates settings changed or disappeared.")
+            return 9
+        # The effective value must now come from the ordinary .repo file.
+        effective = run(prefix + [
+            "--dump-repo-config=fedora",
+        ], env)
+        if effective.returncode or "baseurl = https://base.example.org/fedora/" not in effective.stdout:
+            print("FAIL: Fedora did not fall back to the base .repo URL.")
+            return 10
+        print("PASS: unsetopt restores effective Fedora URL from the .repo file.")
+
+        print("\n=== rejected invalid option must not change overrides ===")
+        snapshot = override.read_bytes()
+        invalid = run(prefix + [
+            "config-manager", "setopt", "fedora.mirrorpilot_nonexistent_option=1",
+        ], env)
+        after_invalid = override.read_bytes()
+        if invalid.returncode == 0:
+            print("INCONCLUSIVE: DNF5 unexpectedly accepted an unknown option.")
+            return 11
+        if after_invalid != snapshot:
+            print("FAIL: failed command changed the override file.")
+            return 12
+        print("PASS: rejected option left the override file unchanged.")
+        print("\nPASS: all sandbox scenarios completed; host configuration untouched.")
         return 0
 
 
