@@ -24,7 +24,7 @@ def prepare_manual_edit(plan: ChangePlan) -> ManualEdit:
         "1. Inspect Configuration origins for existing overrides and conflicts.\n"
         "2. Review the exact command below and make your own backup if needed.\n"
         "3. The command uses $releasever and $basearch; the single quotes "
-        "prevent your shell from expanding them. Future mirror availability is not verified.\\n"
+        "prevent your shell from expanding them. Future mirror availability is not verified.\n"
         "4. Copy the command and run it yourself in a terminal. It requires "
         "administrator privileges; MirrorPilot does not execute it.\n"
         "5. Click Verify effective settings to compare DNF5-reported values.\n"
@@ -40,7 +40,7 @@ def verify_effective_values(plan: ChangePlan, values: dict[str, str]) -> tuple[b
     metalink = values.get("metalink", "").strip()
     mirrorlist = values.get("mirrorlist", "").strip()
     template = persistent_mirror_url(plan.repo_id, plan.proposed_url, plan.target_release)
-    if base in (template, plan.proposed_url) and not metalink and not mirrorlist:
+    if base == template and not metalink and not mirrorlist:
         return True, "DNF5 effective baseurl matches the recommendation; metalink and mirrorlist are empty."
     return False, (
         "Current configuration differs from recommendation.\n"
