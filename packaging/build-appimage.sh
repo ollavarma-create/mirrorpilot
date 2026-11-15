@@ -29,6 +29,20 @@ cp "$ROOT/assets/mirrorpilot.svg" "$APPDIR/usr/share/icons/hicolor/scalable/apps
 cat > "$APPDIR/AppRun" <<'EOF'
 #!/bin/sh
 HERE="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+# Bundled OpenSSL may have CA defaults from the build distribution.
+# Prefer the host trust store, but never override a user-supplied setting.
+if [ "${SSL_CERT_FILE+x}" != x ]; then
+  for ca_bundle in \
+    /etc/ssl/certs/ca-certificates.crt \
+    /etc/pki/tls/certs/ca-bundle.crt \
+    /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem \
+    /etc/ssl/cert.pem; do
+    if [ -f "$ca_bundle" ] && [ -r "$ca_bundle" ]; then
+      export SSL_CERT_FILE="$ca_bundle"
+      break
+    fi
+  done
+fi
 exec "$HERE/usr/bin/mirrorpilot" "$@"
 EOF
 chmod +x "$APPDIR/AppRun"
