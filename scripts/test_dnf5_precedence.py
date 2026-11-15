@@ -43,7 +43,7 @@ def _run(root: Path, label: str, *, override_a: str | None = None,
                 encoding="utf-8",
             )
     args = [
-        "dnf5", f"--installroot={root}", "--config=/etc/dnf/dnf.conf",
+        "dnf5", f"--installroot={root}", f"--config={config}",
         "--releasever=44", f"--setopt=reposdir={repo_dir}",
         "--dump-repo-config=mirrorpilot-precedence-test",
     ]
