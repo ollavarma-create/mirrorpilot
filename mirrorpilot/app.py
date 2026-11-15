@@ -434,7 +434,7 @@ class MainWindow(QMainWindow):
         error = bytes(process.readAllStandardError()).decode("utf-8", errors="replace")
         if exit_status != QProcess.ExitStatus.NormalExit or exit_code != 0:
             detail = error.strip()[:500] or "Authorization canceled or denied."
-            self.finish_authorization(f"Authorization was not completed (exit {exit_code}).\\n{detail}", success=False)
+            self.finish_authorization(f"Authorization was not completed (exit {exit_code}).\n{detail}", success=False)
             return
         try:
             response = parse_probe_response(output.strip())
@@ -442,7 +442,7 @@ class MainWindow(QMainWindow):
             self.finish_authorization(f"Helper returned an invalid response: {exc}", success=False)
             return
         self.finish_authorization(
-            f"Authorization succeeded. Helper effective UID: {response['effective_uid']}.\\n"
+            f"Authorization succeeded. Helper effective UID: {response['effective_uid']}.\n"
             "The probe performed no repository writes.", success=True)
 
     def finish_authorization(self, message, *, success):
