@@ -125,3 +125,22 @@ def test_configured_url_requires_https_before_network(monkeypatch):
     monkeypatch.setattr(d, "benchmark", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("network")))
     with pytest.raises(ValueError):
         d.run_diagnostics("45", 1, "updates", "http://example.org/repo/")
+
+def test_http_404_explained_without_claiming_full_repository_missing():
+    row = d.MirrorHealth(d.MirrorResult(
+        "https://funet.example/updates/45/", "Configured", "error", None, None, 0,
+        "HTTP Error 404: Not Found"))
+    explanation = d.explain_source(row)
+    assert "HTTP 404" in explanation
+    assert "repodata/repomd.xml" in explanation
+    assert "or a referenced metadata file" in explanation
+    assert row.health == "error"
+
+def test_timeout_not_presented_as_permanent_failure():
+    row = d.MirrorHealth(d.MirrorResult(
+        "https://funet.example/", "Configured", "error", None, None, 0,
+        "The read operation timed out"))
+    assert "retry" in d.explain_source(row)
+
+def test_no_configured_source_not_misreported_healthy():
+    assert "not" in d.explain_source(None).lower()
