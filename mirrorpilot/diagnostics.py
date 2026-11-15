@@ -78,33 +78,15 @@ def run_diagnostics(release: str, metadata_count: int = 1, repo: str = "fedora",
     def emit(phase, done, total, detail=""):
         if progress:
             progress(phase, done, total, detail)
-    current = None
-    if configured_base:
-        base = configured_base.strip().rstrip("/") + "/"
-        if _base_from_metalink(base + "repodata/repomd.xml") != base:
-            raise ValueError("Configured source must be a concrete HTTPS repository URL")
-        emit("current", 0, 1, base)
-        current = probe(base, "Configured")
-        emit("current", 1, 1, base)
-    speeds = benchmark(release, repo=repo, progress=lambda done, total: emit("benchmark", done, total))
-    if current is not None:
-        speeds = [current] + [s for s in speeds if s.url.rstrip("/") != current.url.rstrip("/")]
+    # Alternative search deliberately excludes the configured source.
+    # Check it separately with check_current_repository().
+    speeds = benchmark(release, repo=repo,
+                       progress=lambda done, total: emit("benchmark", done, total))
     rows = []
     for i, speed in enumerate(speeds, 1):
         index = _index_safely(speed, release, repo) if speed.status == "measured" else None
         rows.append(MirrorHealth(speed, index))
         emit("index", i, len(speeds), speed.country)
-    # Verify the configured source first, including when its index differs:
-    # missing referenced files can explain a failed DNF update.
-    if current is not None and rows and rows[0].index is not None:
-        if rows[0].index.status in ("index-match", "different"):
-            try:
-                result = audit_referenced(current.url, "Configured", release,
-                                          progress=lambda kind, n, total, done, size:
-                                          emit("bytes", n, total, f"Current {kind}: {done}/{size} bytes"))
-            except Exception as exc:
-                result = AuditResult("error", f"Configured metadata check interrupted: {exc}", current.url)
-            rows[0] = MirrorHealth(current, rows[0].index, result)
     # Verify fastest alternative whose index matches. Other rows remain unchecked.
     candidates = [i for i, row in enumerate(rows) if row.speed.country != "Configured" and row.health == "unchecked"
                   and row.index is not None and row.index.status == "index-match"]
