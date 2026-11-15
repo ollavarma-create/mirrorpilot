@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
 )
 from mirrorpilot.check import check_baseurl
 from mirrorpilot.repos import get_repositories, _version
+from mirrorpilot.releases import available_targets
 from mirrorpilot.audit import audit_referenced
 from mirrorpilot.diagnostics import run_diagnostics, fastest_verified
 
@@ -50,9 +51,10 @@ class MainWindow(QMainWindow):
         main = QWidget()
         layout = QVBoxLayout(main)
         toolbar = QHBoxLayout()
-        toolbar.addWidget(QLabel("Fedora release:"))
-        self.version = QLineEdit()
-        self.version.setPlaceholderText("Current release or e.g. 45")
+        toolbar.addWidget(QLabel(f"Installed: Fedora {_version()} · Diagnose release:"))
+        self.version = QComboBox()
+        self.version.addItem(f"Fedora {_version()} — installed", _version())
+        self.version.currentIndexChanged.connect(self.load_repos)
         toolbar.addWidget(self.version)
         self.refresh_button = QPushButton("Load repositories")
         self.refresh_button.clicked.connect(self.load_repos)
@@ -110,6 +112,19 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(main)
         self.statusBar().showMessage("Ready")
         self.load_repos()
+        self.run_job(available_targets, (), self.releases_loaded)
+
+    def releases_loaded(self, targets, error):
+        if error or not targets:
+            return
+        selected = self.version.currentData()
+        self.version.blockSignals(True)
+        self.version.clear()
+        for value, label in targets:
+            self.version.addItem(label, value)
+        index = self.version.findData(selected)
+        self.version.setCurrentIndex(max(index, 0))
+        self.version.blockSignals(False)
 
     def run_job(self, action, args, callback, progress=None):
         thread = QThread(self)
@@ -130,7 +145,7 @@ class MainWindow(QMainWindow):
 
     def load_repos(self):
         self.refresh_button.setEnabled(False)
-        self.run_job(get_repositories, (self.version.text().strip() or None,), self.loaded)
+        self.run_job(get_repositories, (self.version.currentData() or None,), self.loaded)
 
     def loaded(self, repos, error):
         self.refresh_button.setEnabled(True)
@@ -171,6 +186,8 @@ class MainWindow(QMainWindow):
     def scan_progress(self, phase, done, total, detail):
         if phase == "benchmark":
             self.progress_text = f"Benchmarking mirror {min(done + 1, total)}/{total}…" if done < total else "Checking indexes…"
+        elif phase == "current":
+            self.progress_text = "Checking configured repository…"
         elif phase == "index":
             self.progress_text = f"Checking index {done}/{total}…"
         elif phase == "metadata":
@@ -198,8 +215,11 @@ class MainWindow(QMainWindow):
         self.results = []
         self.mirrors.setRowCount(0)
         self.scan_repo = self.repo_choice.currentData()
-        self.scan_release = self.version.text().strip() or _version()
-        self.run_job(run_diagnostics, (self.scan_release, 1, self.scan_repo),
+        self.scan_release = self.version.currentData() or _version()
+        configured = next((r for r in self.repos
+                           if r.repo_id == self.scan_repo and r.status == "enabled"), None)
+        self.configured_url = configured.baseurl.strip() if configured and configured.baseurl.strip().startswith("https://") else None
+        self.run_job(run_diagnostics, (self.scan_release, 1, self.scan_repo, self.configured_url),
                      self.scan_finished, self.scan_progress)
 
     def scan_finished(self, results, error):
@@ -224,7 +244,7 @@ class MainWindow(QMainWindow):
         uncertain = sum(r.health == "uncertain" for r in self.results)
         verified = sum(r.health == "verified" for r in self.results)
         self.summary.setText(
-            f"Fedora {self.scan_release} {self.scan_repo} · {len(self.results)} mirrors · {verified} verified · {failures} problems · "
+            f"Fedora {self.scan_release} {self.scan_repo} · {len(self.results)} sources · {verified} verified · {failures} problems · "
             f"{uncertain} inconclusive · {len(self.results)-verified-failures-uncertain} not fully checked"
             + (f" · Recommended: {winner.speed.country} {winner.speed.mbps:.1f} Mbit/s" if winner else
                " · No verified recommendation yet")
@@ -235,6 +255,8 @@ class MainWindow(QMainWindow):
                      "uncertain": "Inconclusive", "unchecked": "Not checked"}[row.health]
             if row is winner:
                 label = "★ Recommended"
+            if speed.country == "Configured":
+                label = "Current · " + label
             checks = f"{row.index.status if row.index else '—'} / {row.metadata.status if row.metadata else 'not checked'}"
             values = [speed.country, speed.url,
                       f"{speed.mbps:.2f}" if speed.mbps is not None else "—",
@@ -250,6 +272,15 @@ class MainWindow(QMainWindow):
                 if row is winner:
                     item.setForeground(QBrush(QColor("#166534")))
                 self.mirrors.setItem(i, j, item)
+        current = next((r for r in self.results if r.speed.country == "Configured"), None)
+        if current is None:
+            self.summary.setText("Configured source not tested (no enabled concrete HTTPS baseurl found). "
+                                 + self.summary.text())
+        elif current.health == "verified":
+            self.summary.setText("Current source: checked metadata OK; no change required for integrity. "
+                                 + self.summary.text())
+        else:
+            self.summary.setText(f"Current source: {current.health}; inspect details. " + self.summary.text())
         self.statusBar().showMessage("Diagnostics complete")
         self.selected_mirror()
 
