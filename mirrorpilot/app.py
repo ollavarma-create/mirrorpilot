@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import sys
-from PySide6.QtCore import QObject, QThread, Signal, Slot
+from PySide6.QtCore import QObject, QThread, Signal, Slot, QTimer
 from PySide6.QtWidgets import (
     QApplication, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
     QMainWindow, QMessageBox, QPushButton, QTableWidget, QTableWidgetItem,
@@ -15,6 +15,7 @@ from mirrorpilot.speed import benchmark
 
 class Worker(QObject):
     finished = Signal(object, object)
+    progress = Signal(int, int)
 
     def __init__(self, action, *args):
         super().__init__()
@@ -23,7 +24,8 @@ class Worker(QObject):
     @Slot()
     def run(self):
         try:
-            self.finished.emit(self.action(*self.args), None)
+            result = self.action(*self.args, progress=self.progress.emit) if self.action is benchmark else self.action(*self.args)
+            self.finished.emit(result, None)
         except Exception as error:
             self.finished.emit(None, str(error))
 
@@ -36,6 +38,13 @@ class MainWindow(QMainWindow):
         self.repos = []
         self.threads = []
         self.workers = []  # Retain Python references until background work finishes.
+        self.benchmark_label = 'Benchmark approved mirrors (up to 8; read-only)'
+        self.spinner_frames = ('◐', '◓', '◑', '◒')
+        self.spinner_step = 0
+        self.benchmark_progress = 'Finding mirrors…'
+        self.benchmark_timer = QTimer(self)
+        self.benchmark_timer.setInterval(140)
+        self.benchmark_timer.timeout.connect(self.animate_benchmark)
 
         main = QWidget()
         layout = QVBoxLayout(main)
@@ -62,7 +71,7 @@ class MainWindow(QMainWindow):
         self.check_button.setEnabled(False)
         self.check_button.clicked.connect(self.check_selected)
         layout.addWidget(self.check_button)
-        self.speed_button = QPushButton('Benchmark approved mirrors (up to 8; read-only)')
+        self.speed_button = QPushButton(self.benchmark_label)
         self.speed_button.clicked.connect(self.test_speeds)
         layout.addWidget(self.speed_button)
         self.speed_table = QTableWidget(0, 6)
@@ -80,13 +89,15 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("Ready")
         self.load_repos()
 
-    def run_job(self, action, args, callback):
+    def run_job(self, action, args, callback, progress_callback=None):
         thread = QThread(self)
         worker = Worker(action, *args)
         self.workers.append(worker)
         worker.moveToThread(thread)
         thread.started.connect(worker.run)
         worker.finished.connect(callback)
+        if progress_callback is not None:
+            worker.progress.connect(progress_callback)
         worker.finished.connect(thread.quit)
         worker.finished.connect(worker.deleteLater)
         thread.finished.connect(thread.deleteLater)
@@ -137,13 +148,29 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("Testing repository metadata...")
         self.run_job(check_baseurl, (self.repos[index].baseurl,), self.checked)
 
+    def animate_benchmark(self):
+        frame = self.spinner_frames[self.spinner_step % len(self.spinner_frames)]
+        self.spinner_step += 1
+        self.speed_button.setText(f'{frame} {self.benchmark_progress}')
+
+    def benchmark_progress_changed(self, done, total):
+        self.benchmark_progress = f'Testing mirror {done + 1}/{total}…' if done < total else f'Finishing {total}/{total}…'
+        if total == 0:
+            self.benchmark_progress = 'No eligible mirrors found…'
+        self.animate_benchmark()
+
     def test_speeds(self):
         self.speed_button.setEnabled(False)
-        self.statusBar().showMessage('Testing up to 8 Fedora mirrors...')
-        self.details.setPlainText('Country-filtered mirror speed test running...')
-        self.run_job(benchmark, (self.version.text().strip() or _version(),), self.speeds_finished)
+        self.benchmark_progress = 'Finding mirrors…'
+        self.animate_benchmark()
+        self.benchmark_timer.start()
+        self.statusBar().showMessage('Mirror benchmark running...')
+        self.run_job(benchmark, (self.version.text().strip() or _version(),),
+                     self.speeds_finished, self.benchmark_progress_changed)
 
     def speeds_finished(self, results, error):
+        self.benchmark_timer.stop()
+        self.speed_button.setText(self.benchmark_label)
         self.speed_button.setEnabled(True)
         if error:
             self.details.setPlainText('Mirror speed test failed: ' + error)
