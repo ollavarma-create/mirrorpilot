@@ -112,7 +112,6 @@ def test_restore_preserves_bytes_and_mode(sandbox):
     assert tx.tx.target.stat().st_mode & 0o777 == 0o640
 
 
-@pytest.mark.xfail(strict=True, reason="Journal snapshot authenticity is not yet enforced")
 def test_tampered_before_image_is_rejected(sandbox):
     tx = SandboxDNFTransaction(sandbox)
     tx.tx.target.write_bytes(b"after")
