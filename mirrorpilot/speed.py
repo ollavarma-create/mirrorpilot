@@ -25,7 +25,7 @@ MAX_REGISTRY = 3 * 1024 * 1024
 SAMPLE_BYTES = 2 * 1024 * 1024
 REPEATS = 3
 TIMEOUT = 12
-REGISTRY_URL = "https://mirrormanager.fedoraproject.org/mirrors/Fedora"
+REGISTRY_URL = "https://mirrormanager.fedoraproject.org/mirrors/Fedora?page_size=500"
 
 
 @dataclass(frozen=True)
