@@ -53,9 +53,9 @@ cp -a "$DIST_DIR/." "$APPDIR/usr/bin/"
 # --- Desktop (pakollinen) ---
 DESKTOP_SRC="$ROOT/packaging/io.github.ollavarma_create.MirrorPilot.desktop"
 if [[ -f "$DESKTOP_SRC" ]]; then
-  cp "$DESKTOP_SRC" "$APPDIR/mirrorpilot.desktop"
+  cp "$DESKTOP_SRC" "$APPDIR/io.github.ollavarma_create.MirrorPilot.desktop"
 else
-  cat > "$APPDIR/mirrorpilot.desktop" << 'EOF'
+  cat > "$APPDIR/io.github.ollavarma_create.MirrorPilot.desktop" << 'EOF'
 [Desktop Entry]
 Type=Application
 Name=MirrorPilot
@@ -67,9 +67,9 @@ Categories=System;
 StartupNotify=true
 EOF
 fi
-cp "$APPDIR/mirrorpilot.desktop" "$APPDIR/usr/share/applications/"
+cp "$APPDIR/io.github.ollavarma_create.MirrorPilot.desktop" "$APPDIR/usr/share/applications/"
 
-# --- AppStream (valinnainen) ---
+# --- AppStream (match desktop file ID) ---
 if [[ -f "$ROOT/packaging/mirrorpilot.appdata.xml" ]]; then
   cp "$ROOT/packaging/mirrorpilot.appdata.xml" \
      "$APPDIR/usr/share/metainfo/io.github.ollavarma_create.MirrorPilot.appdata.xml"

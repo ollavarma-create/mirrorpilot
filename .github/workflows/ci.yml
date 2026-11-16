@@ -17,9 +17,9 @@ jobs:
     timeout-minutes: 60
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
           cache: pip
@@ -28,7 +28,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            librsvg2-bin appstream patchelf ccache
+            librsvg2-bin appstream patchelf ccache libegl1
 
       - name: Install Python deps
         run: |
@@ -43,9 +43,30 @@ jobs:
       - name: Build AppImage
         run: bash packaging/build-appimage.sh
           
+      - name: Smoke test packaged AppImage (unsupported Ubuntu host)
+        shell: bash
+        run: |
+          set +e
+          timeout --signal=TERM --kill-after=3s 12s env \
+            APPIMAGE_EXTRACT_AND_RUN=1 QT_QPA_PLATFORM=offscreen \
+            ./dist/MirrorPilot-*.AppImage > /tmp/mirrorpilot-smoke.log 2>&1
+          status=$?
+          set -e
+          cat /tmp/mirrorpilot-smoke.log
+          # The expected unsupported-OS QMessageBox stays open in offscreen Qt.
+          # A timeout means the application reached its GUI event loop.
+          if [[ "$status" -ne 124 ]]; then
+            echo "AppImage smoke test failed: unexpected exit status $status" >&2
+            exit 1
+          fi
+          if grep -Eiq 'Traceback|ImportError|ModuleNotFoundError|Segmentation fault|Could not load the Qt platform plugin|Aborted' /tmp/mirrorpilot-smoke.log; then
+            echo "AppImage smoke test failed: startup error detected" >&2
+            exit 1
+          fi
+
       - name: Upload AppImage
         if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: mirrorpilot-appimage-x86_64
           path: |

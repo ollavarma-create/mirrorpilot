@@ -57,11 +57,11 @@ def verify_effective_values(plan: ChangePlan, values: dict[str, str],
         return False, ("DNF5 effective mirror matches, but the saved variable-based "
                        "setting could not be confirmed. Check Configuration origins.")
     return False, (
-        "Current configuration differs from recommendation.\\n"
-        f"Current mirror: {base or '(empty)'}\\n"
-        f"Recommended setting: {template}\\n"
-        f"Stored baseurl: {raw_baseurl if raw_baseurl is not None else '(unavailable)'}\\n"
-        f"Current metalink: {metalink or '(empty)'}\\n"
-        f"Current mirrorlist: {mirrorlist or '(empty)'}\\n\\n"
+        "Current configuration differs from recommendation.\n"
+        f"Current mirror: {base or '(empty)'}\n"
+        f"Recommended setting: {template}\n"
+        f"Stored baseurl: {raw_baseurl if raw_baseurl is not None else '(unavailable)'}\n"
+        f"Current metalink: {metalink or '(empty)'}\n"
+        f"Current mirrorlist: {mirrorlist or '(empty)'}\n\n"
         "No changes have been made by MirrorPilot."
     )
