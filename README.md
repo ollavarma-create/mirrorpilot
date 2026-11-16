@@ -58,6 +58,15 @@ python -m pip install -e .
 mirrorpilot
 ```
 
+To run automated tests, install the optional test dependencies (including `pytest`):
+
+```bash
+python -m pip install -e '.[test]'
+python -m pytest -q
+```
+
+No separate `requirements.txt` is required: runtime and test dependencies are declared in `pyproject.toml`.
+
 No `sudo` is needed to run MirrorPilot. If you already have a local checkout, update it with `git pull` before installing or running.
 
 ## Quick start
@@ -126,7 +135,7 @@ python -m pip install -e '.[test]'
 python -m pytest -q
 ```
 
-In the Fedora 44 development environment, the latest reported run completed with **242 passed, 1 skipped** (November 2026). This is a local test result, not a claim of exhaustive coverage or CI certification.
+In the Fedora 45 development environment, the latest reported run completed with **254 passed, 1 skipped** (16 November 2026). This is a local test result, not a claim of exhaustive coverage or CI certification.
 
 Bug reports are especially welcome for DNF5 configuration differences, mirror discovery timeouts, Fedora release changes, and confusing diagnostic messages. Please include the Fedora release, steps to reproduce, and relevant non-sensitive logs.
 

@@ -106,7 +106,7 @@ def test_three_samples_median(monkeypatch):
     assert all(url.endswith("/repodata/primary.xml.zck") for url in seen)
 
 def test_no_unapproved_probes(monkeypatch):
-    monkeypatch.setattr(speed, "discover", lambda *args: [])
+    monkeypatch.setattr(speed, "discover", lambda *args, **kwargs: [])
     monkeypatch.setattr(speed, "probe", lambda *args: pytest.fail("unexpected probe"))
     assert speed.benchmark("45") == []
 
@@ -136,7 +136,7 @@ def test_range_is_recorded(monkeypatch):
     assert result.max_mbps == 200
 
 def test_progress_reports_each_mirror(monkeypatch):
-    monkeypatch.setattr(speed, 'discover', lambda *args: [('https://a.example/', 'FI'), ('https://b.example/', 'SE')])
+    monkeypatch.setattr(speed, 'discover', lambda *args, **kwargs: [('https://a.example/', 'FI'), ('https://b.example/', 'SE')])
     monkeypatch.setattr(speed, 'probe', lambda base, country: speed.MirrorResult(base, country, 'measured', 10, 100, 100, 'ok'))
     events = []
     results = speed.benchmark('45', progress=lambda done, total: events.append((done, total)))
