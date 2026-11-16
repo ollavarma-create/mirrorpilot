@@ -2,14 +2,15 @@
 from __future__ import annotations
 
 import sys
+from importlib.metadata import PackageNotFoundError, version
 from dataclasses import replace
 from PySide6.QtCore import QObject, QThread, Signal, Slot, QTimer, Qt, QSettings
-from PySide6.QtGui import QColor, QBrush
+from PySide6.QtGui import QColor, QBrush, QIcon
 from PySide6.QtWidgets import (
     QApplication, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow,
     QMessageBox, QPushButton, QTableWidget, QTableWidgetItem, QTextEdit,
     QVBoxLayout, QWidget, QAbstractItemView, QComboBox, QToolButton,
-    QDialog, QDialogButtonBox, QSpinBox, QFormLayout,
+    QDialog, QDialogButtonBox, QSpinBox, QFormLayout, QStyle,
 )
 from mirrorpilot.check import check_baseurl
 from mirrorpilot.repos import get_repositories, _version
@@ -37,6 +38,59 @@ class Worker(QObject):
             self.finished.emit(result, None)
         except Exception as exc:
             self.finished.emit(None, str(exc))
+
+class MirrorSettingsDialog(QDialog):
+    """Self-contained dialog; avoid Python closures capturing Qt child widgets."""
+
+    def __init__(self, settings: QSettings, parent=None):
+        super().__init__(parent)
+        self._settings = settings
+        self.setWindowTitle("Mirror discovery settings")
+        layout = QVBoxLayout(self)
+        explanation = QLabel(
+            "Automatic uses Fedora MirrorManager's regional selection. "
+            "Override only when you want mirrors registered in a specific country."
+        )
+        explanation.setWordWrap(True)
+        layout.addWidget(explanation)
+        form = QFormLayout()
+        self.country_edit = QLineEdit(self)
+        country = str(settings.value("mirror/country", "") or "").strip().upper()
+        if country and (len(country) != 2 or not country.isascii() or not country.isalpha()):
+            country = ""
+        self.country_edit.setText(country)
+        self.country_edit.setMaxLength(2)
+        self.country_edit.setPlaceholderText("Automatic (leave empty), or ISO code e.g. FI")
+        form.addRow("Country override:", self.country_edit)
+        self.mirror_count = QSpinBox(self)
+        self.mirror_count.setRange(1, 24)
+        try:
+            count = int(settings.value("mirror/count", 8))
+        except (TypeError, ValueError):
+            count = 8
+        self.mirror_count.setValue(max(1, min(count, 24)))
+        form.addRow("Mirrors to benchmark:", self.mirror_count)
+        layout.addLayout(form)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
+            parent=self,
+        )
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def accept(self):
+        country = self.country_edit.text().strip().upper()
+        if country and (len(country) != 2 or not country.isascii() or not country.isalpha()):
+            QMessageBox.warning(
+                self, "Invalid country",
+                "Enter a two-letter ISO country code or leave blank.",
+            )
+            return
+        self._settings.setValue("mirror/country", country)
+        self._settings.setValue("mirror/count", self.mirror_count.value())
+        super().accept()
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -71,11 +125,20 @@ class MainWindow(QMainWindow):
         self.repo_choice.addItem("Fedora updates", "updates")
         toolbar.addWidget(self.repo_choice)
         toolbar.addStretch()
-        self.refresh_button = QToolButton()
-        self.refresh_button.setText("↻")
-        self.refresh_button.setToolTip("Reload configured repositories from disk (read-only)")
-        self.refresh_button.clicked.connect(self.load_repos)
-        toolbar.addWidget(self.refresh_button)
+        self.settings_button = QToolButton()
+        self.settings_button.setIcon(QIcon.fromTheme("settings-configure",
+            self.style().standardIcon(QStyle.StandardPixmap.SP_FileDialogDetailedView)))
+        self.settings_button.setToolTip("Settings — mirror discovery preferences")
+        self.settings_button.setAccessibleName("Settings")
+        self.settings_button.clicked.connect(self.show_settings)
+        toolbar.addWidget(self.settings_button)
+        self.about_button = QToolButton()
+        self.about_button.setIcon(QIcon.fromTheme("help-about",
+            self.style().standardIcon(QStyle.StandardPixmap.SP_MessageBoxInformation)))
+        self.about_button.setToolTip("About MirrorPilot")
+        self.about_button.setAccessibleName("About MirrorPilot")
+        self.about_button.clicked.connect(self.show_about)
+        toolbar.addWidget(self.about_button)
         layout.addLayout(toolbar)
 
         actions = QHBoxLayout()
@@ -101,11 +164,18 @@ class MainWindow(QMainWindow):
         )
         self.conflicts_button.clicked.connect(self.show_config_origins)
         actions.addWidget(self.conflicts_button)
-        self.settings_button = QPushButton("Settings…")
-        self.settings_button.clicked.connect(self.show_settings)
-        actions.addWidget(self.settings_button)
         layout.addLayout(actions)
-        layout.addWidget(QLabel("Configured repositories"))
+        repos_header = QHBoxLayout()
+        repos_header.addWidget(QLabel("Configured repositories"))
+        repos_header.addStretch()
+        self.refresh_button = QToolButton()
+        self.refresh_button.setIcon(QIcon.fromTheme("view-refresh",
+            self.style().standardIcon(QStyle.StandardPixmap.SP_BrowserReload)))
+        self.refresh_button.setToolTip("Refresh configured repositories from disk (read-only)")
+        self.refresh_button.setAccessibleName("Refresh configured repositories")
+        self.refresh_button.clicked.connect(self.load_repos)
+        repos_header.addWidget(self.refresh_button)
+        layout.addLayout(repos_header)
         self.table = QTableWidget(0, 4)
         self.table.setHorizontalHeaderLabels(["Repository", "Status", "Effective source", "Config file"])
         # Keep every column user-resizable. Stretch would lock Effective source
@@ -156,12 +226,14 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.details)
         self.verify_button.setText("Verify selected metadata")
         self.verify_button.setToolTip("Verify up to 3 referenced metadata files for the selected mirror (up to 512 MiB each). Read-only.")
-        layout.addWidget(self.verify_button)
+        selected_actions = QHBoxLayout()
+        selected_actions.addWidget(self.verify_button, 1)
         self.preview_button = QPushButton("Copy DNF5 configuration command…")
         self.preview_button.setToolTip("Show a copyable DNF5 config-manager command. MirrorPilot never runs it.")
         self.preview_button.setEnabled(False)
         self.preview_button.clicked.connect(self.preview_change)
-        layout.addWidget(self.preview_button)
+        selected_actions.addWidget(self.preview_button, 1)
+        layout.addLayout(selected_actions)
         layout.addWidget(QLabel("Read-only: no DNF settings, packages or caches are modified."))
         self.setCentralWidget(main)
         self.statusBar().showMessage("Ready")
@@ -221,6 +293,35 @@ class MainWindow(QMainWindow):
             enabled = url.startswith("https://") and "$" not in url and " " not in url
         self.check_button.setEnabled(enabled)
 
+    def show_about(self):
+        """Display project identity without opening a browser or changing DNF."""
+        try:
+            app_version = version("mirrorpilot")
+        except PackageNotFoundError:
+            app_version = "development"
+        dialog = QDialog(self)
+        dialog.setWindowTitle("About MirrorPilot")
+        dialog.resize(480, 260)
+        layout = QVBoxLayout(dialog)
+        heading = QLabel(f"<h2>MirrorPilot {app_version}</h2>", dialog)
+        layout.addWidget(heading)
+        description = QLabel(
+            "Read-only Fedora DNF5 mirror diagnostics.\n"
+            "Compare mirror performance, repository indexes and selected metadata.\n\n"
+            "License: GPL-3.0-only\n"
+            "Project: https://github.com/ollavarma-create/mirrorpilot\n\n"
+            "MirrorPilot is an independent open-source project, not affiliated with the Fedora Project.\n"
+            "Development is AI-assisted, with human review and testing.",
+            dialog,
+        )
+        description.setWordWrap(True)
+        description.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        layout.addWidget(description)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, parent=dialog)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        dialog.exec()
+
     def mirror_preferences(self):
         """Read and validate persistent preferences before each scan."""
         country = str(self.settings.value("mirror/country", "") or "").strip().upper()
@@ -235,47 +336,16 @@ class MainWindow(QMainWindow):
     def show_settings(self):
         if self.running:
             return
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Mirror discovery settings")
-        layout = QVBoxLayout(dialog)
-        explanation = QLabel(
-            "Automatic uses Fedora MirrorManager's regional selection. "
-            "Override only when you want mirrors registered in a specific country."
-        )
-        explanation.setWordWrap(True)
-        layout.addWidget(explanation)
-        form = QFormLayout()
-        country = QLineEdit(dialog)
-        selected, count = self.mirror_preferences()
-        country.setText(selected or "")
-        country.setMaxLength(2)
-        country.setPlaceholderText("Automatic (leave empty), or ISO code e.g. FI")
-        form.addRow("Country override:", country)
-        mirror_count = QSpinBox(dialog)
-        mirror_count.setRange(1, 24)
-        mirror_count.setValue(count)
-        form.addRow("Mirrors to benchmark:", mirror_count)
-        layout.addLayout(form)
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
-            parent=dialog,
-        )
-        def save():
-            value = country.text().strip().upper()
-            if value and (len(value) != 2 or not value.isascii() or not value.isalpha()):
-                QMessageBox.warning(dialog, "Invalid country", "Enter a two-letter ISO country code or leave blank.")
-                return
-            self.settings.setValue("mirror/country", value)
-            self.settings.setValue("mirror/count", mirror_count.value())
+        dialog = MirrorSettingsDialog(self.settings, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            country, count = self.mirror_preferences()
             self.scan_button.setToolTip(
-                f"Benchmark up to {mirror_count.value()} MirrorManager mirrors "
-                f"({'automatic' if not value else value} country selection). Read-only."
+                f"Benchmark up to {count} MirrorManager mirrors "
+                f"({country or 'automatic'} country selection). Read-only."
             )
-            dialog.accept()
-        buttons.accepted.connect(save)
-        buttons.rejected.connect(dialog.reject)
-        layout.addWidget(buttons)
-        dialog.exec()
+        # The dialog is owned by the main window; release it while the Qt
+        # event loop is still running, rather than during interpreter teardown.
+        dialog.deleteLater()
 
     def show_config_origins(self):
         row = self.table.currentRow()
