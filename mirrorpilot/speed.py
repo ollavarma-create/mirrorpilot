@@ -19,7 +19,6 @@ import xml.etree.ElementTree as ET
 
 from mirrorpilot.check import SafeRedirectHandler
 
-COUNTRIES = ("FI", "SE", "EE", "DE", "NL", "DK")
 MAX_MIRRORS = 8
 MAX_LIST = 1024 * 1024
 MAX_REGISTRY = 3 * 1024 * 1024
@@ -136,38 +135,47 @@ def parse_metalink(data: bytes) -> list[str]:
     return result
 
 
-def discover(release: str, repo: str = "fedora") -> list[tuple[str, str]]:
+def discover(release: str, repo: str = "fedora", country: str | None = None,
+             max_mirrors: int = MAX_MIRRORS) -> list[tuple[str, str]]:
+    """Return registered HTTPS mirrors in Fedora MirrorManager's priority order.
+
+    By default MirrorManager chooses geographically appropriate mirrors based
+    on the requesting network. An explicit country overrides that selection.
+    """
     if not release.isdigit() or len(release) > 3:
         raise ValueError("Invalid release")
     if repo not in ("fedora", "updates"):
         raise ValueError("Unsupported repository")
+    if not isinstance(max_mirrors, int) or isinstance(max_mirrors, bool) or not 1 <= max_mirrors <= 24:
+        raise ValueError("max_mirrors must be between 1 and 24")
+    if country is not None:
+        if not isinstance(country, str) or len(country) != 2 or not country.isascii() or not country.isalpha():
+            raise ValueError("Country must be a two-letter ISO country code")
+        country = country.upper()
     name = f"fedora-{release}" if repo == "fedora" else f"updates-released-f{release}"
-    query = urlencode({"repo": name, "arch": "x86_64", "country": ",".join(COUNTRIES)})
+    params = {"repo": name, "arch": "x86_64"}
+    if country is not None:
+        params["country"] = country
+    query = urlencode(params)
     try:
         metalink = _download("https://mirrors.fedoraproject.org/metalink?" + query, MAX_LIST)
     except TimeoutError as exc:
         raise RuntimeError(f"Fedora metalink discovery timed out: {exc}") from exc
-    # Registry is authoritative for registered country; no hostname heuristics.
+    # The independent registry supplies country labels, not geographic filtering.
     try:
         registry = parse_inventory(_download(REGISTRY_URL, MAX_REGISTRY))
     except TimeoutError as exc:
         raise RuntimeError(f"MirrorManager country registry timed out: {exc}") from exc
-    buckets = {country: [] for country in COUNTRIES}
+    selected = []
     for base in parse_metalink(metalink):
         host = urlsplit(base).hostname or ""
-        country = registry.get(host.lower())
-        if country in buckets:
-            buckets[country].append((base, country))
-    # Round-robin preserves MirrorManager order within each country while
-    # preventing the first country's mirrors from filling all eight slots.
-    selected = []
-    while len(selected) < MAX_MIRRORS:
-        added = False
-        for country in COUNTRIES:
-            if buckets[country] and len(selected) < MAX_MIRRORS:
-                selected.append(buckets[country].pop(0))
-                added = True
-        if not added:
+        registered_country = registry.get(host.lower())
+        if registered_country is None:
+            continue  # Missing or ambiguous registration fails closed.
+        if country is not None and registered_country != country:
+            continue
+        selected.append((base, registered_country))
+        if len(selected) >= max_mirrors:
             break
     return selected
 
