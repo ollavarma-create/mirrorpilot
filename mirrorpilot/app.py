@@ -238,12 +238,11 @@ class MainWindow(QMainWindow):
         heading = QLabel(f"<h2>MirrorPilot {app_version}</h2>", dialog)
         layout.addWidget(heading)
         description = QLabel(
-            "Read-only Fedora DNF5 mirror diagnostics.\\n"
-            "Compare mirror performance, repository indexes and selected metadata.\\n\\n"
-            "License: GPL-3.0-only\\n"
-            "Project: https://github.com/ollavarma-create/mirrorpilot\\n\\n"
-            "MirrorPilot is an independent open-source project and is not "
-            "affiliated with the Fedora Project.\\n"
+            "Read-only Fedora DNF5 mirror diagnostics.\n"
+            "Compare mirror performance, repository indexes and selected metadata.\n\n"
+            "License: GPL-3.0-only\n"
+            "Project: https://github.com/ollavarma-create/mirrorpilot\n\n"
+            "MirrorPilot is an independent open-source project, not affiliated with the Fedora Project.\n"
             "Development is AI-assisted, with human review and testing.",
             dialog,
         )
