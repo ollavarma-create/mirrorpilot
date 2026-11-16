@@ -36,7 +36,7 @@ The **Installed** Fedora version comes from the system; **Diagnose release** sel
 
 **MirrorPilot v0.1.0a2 (x86_64)** — [GitHub Releases](https://github.com/ollavarma-create/mirrorpilot/releases)
 
-The new AppImage is **58,538,488 bytes (55.83 MiB)**. Packaging has been streamlined substantially compared with earlier development builds. The release is built through GitHub Actions with an automated headless startup smoke test; the latest functional and GUI tests were performed on **Fedora KDE 45 (Wayland)**. Earlier Fedora 44 field tests informed development, but compatibility with other Fedora versions is **not yet verified**.
+The new AppImage is **58,538,488 bytes (55.83 MiB)**, down from **279,595,512 bytes (266.64 MiB)** for the earlier locally built `0.1.0a1` AppImage. That is a **79.1% size reduction** (about **4.8× smaller**, saving **210.82 MiB**). These figures compare the specific tested artifacts, not necessarily every build of either version. The release is built through GitHub Actions with an automated headless startup smoke test; the latest functional and GUI tests were performed on **Fedora KDE 45 (Wayland)**. Earlier Fedora 44 field tests informed development, but compatibility with other Fedora versions is **not yet verified**.
 
 **Release status:** The `v0.1.0a2` release asset will be available from GitHub Releases once the release is published. Until then, use the artifact from a successful manual GitHub Actions CI run. A CI artifact is a test build, not a published release.
 
