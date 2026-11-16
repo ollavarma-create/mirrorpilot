@@ -65,15 +65,16 @@ def fastest_verified(rows):
     eligible = [r for r in rows if r.health == "verified" and r.speed.mbps is not None]
     return max(eligible, key=lambda r: r.speed.mbps) if eligible else None
 
-def run_diagnostics(release: str, metadata_count: int = 1, repo: str = "fedora", configured_base: str | None = None, progress=None):
-    """Benchmark eight, compare all indexes, stream metadata for fastest N.
+def run_diagnostics(release: str, metadata_count: int = 1, repo: str = "fedora", configured_base: str | None = None, country: str | None = None,
+                    max_mirrors: int = 8, progress=None):
+    """Benchmark selected mirrors, compare indexes, stream metadata for fastest N.
 
     Default N=1 intentionally avoids downloading up to 12 GiB without
     explicit user approval. No verified recommendation until both checks pass.
     """
     if repo not in ("fedora", "updates"):
         raise ValueError("Unsupported repository")
-    if not 0 <= metadata_count <= 8:
+    if not 0 <= metadata_count <= max_mirrors:
         raise ValueError("metadata_count must be between 0 and 8")
     def emit(phase, done, total, detail=""):
         if progress:
@@ -81,7 +82,8 @@ def run_diagnostics(release: str, metadata_count: int = 1, repo: str = "fedora",
     # Alternative search deliberately excludes the configured source.
     # Check it separately with check_current_repository().
     speeds = benchmark(release, repo=repo,
-                       progress=lambda done, total: emit("benchmark", done, total))
+                       progress=lambda done, total: emit("benchmark", done, total),
+                       country=country, max_mirrors=max_mirrors)
     rows = []
     for i, speed in enumerate(speeds, 1):
         index = _index_safely(speed, release, repo) if speed.status == "measured" else None
