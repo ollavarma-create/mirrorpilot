@@ -5,12 +5,12 @@ import sys
 from importlib.metadata import PackageNotFoundError, version
 from dataclasses import replace
 from PySide6.QtCore import QObject, QThread, Signal, Slot, QTimer, Qt, QSettings
-from PySide6.QtGui import QColor, QBrush
+from PySide6.QtGui import QColor, QBrush, QIcon
 from PySide6.QtWidgets import (
     QApplication, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow,
     QMessageBox, QPushButton, QTableWidget, QTableWidgetItem, QTextEdit,
     QVBoxLayout, QWidget, QAbstractItemView, QComboBox, QToolButton,
-    QDialog, QDialogButtonBox, QSpinBox, QFormLayout,
+    QDialog, QDialogButtonBox, QSpinBox, QFormLayout, QStyle,
 )
 from mirrorpilot.check import check_baseurl
 from mirrorpilot.repos import get_repositories, _version
@@ -72,11 +72,20 @@ class MainWindow(QMainWindow):
         self.repo_choice.addItem("Fedora updates", "updates")
         toolbar.addWidget(self.repo_choice)
         toolbar.addStretch()
-        self.refresh_button = QToolButton()
-        self.refresh_button.setText("↻")
-        self.refresh_button.setToolTip("Reload configured repositories from disk (read-only)")
-        self.refresh_button.clicked.connect(self.load_repos)
-        toolbar.addWidget(self.refresh_button)
+        self.settings_button = QToolButton()
+        self.settings_button.setIcon(QIcon.fromTheme("settings-configure",
+            self.style().standardIcon(QStyle.StandardPixmap.SP_FileDialogDetailedView)))
+        self.settings_button.setToolTip("Settings — mirror discovery preferences")
+        self.settings_button.setAccessibleName("Settings")
+        self.settings_button.clicked.connect(self.show_settings)
+        toolbar.addWidget(self.settings_button)
+        self.about_button = QToolButton()
+        self.about_button.setIcon(QIcon.fromTheme("help-about",
+            self.style().standardIcon(QStyle.StandardPixmap.SP_MessageBoxInformation)))
+        self.about_button.setToolTip("About MirrorPilot")
+        self.about_button.setAccessibleName("About MirrorPilot")
+        self.about_button.clicked.connect(self.show_about)
+        toolbar.addWidget(self.about_button)
         layout.addLayout(toolbar)
 
         actions = QHBoxLayout()
@@ -102,14 +111,18 @@ class MainWindow(QMainWindow):
         )
         self.conflicts_button.clicked.connect(self.show_config_origins)
         actions.addWidget(self.conflicts_button)
-        self.settings_button = QPushButton("Settings…")
-        self.settings_button.clicked.connect(self.show_settings)
-        actions.addWidget(self.settings_button)
-        self.about_button = QPushButton("About…")
-        self.about_button.clicked.connect(self.show_about)
-        actions.addWidget(self.about_button)
         layout.addLayout(actions)
-        layout.addWidget(QLabel("Configured repositories"))
+        repos_header = QHBoxLayout()
+        repos_header.addWidget(QLabel("Configured repositories"))
+        repos_header.addStretch()
+        self.refresh_button = QToolButton()
+        self.refresh_button.setIcon(QIcon.fromTheme("view-refresh",
+            self.style().standardIcon(QStyle.StandardPixmap.SP_BrowserReload)))
+        self.refresh_button.setToolTip("Refresh configured repositories from disk (read-only)")
+        self.refresh_button.setAccessibleName("Refresh configured repositories")
+        self.refresh_button.clicked.connect(self.load_repos)
+        repos_header.addWidget(self.refresh_button)
+        layout.addLayout(repos_header)
         self.table = QTableWidget(0, 4)
         self.table.setHorizontalHeaderLabels(["Repository", "Status", "Effective source", "Config file"])
         # Keep every column user-resizable. Stretch would lock Effective source
