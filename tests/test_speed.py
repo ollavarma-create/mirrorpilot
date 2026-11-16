@@ -19,7 +19,7 @@ def test_conflicting_country_fails_closed():
     assert "mirror.example" not in speed.parse_inventory(
         _registry(("DE", "mirror.example"), ("RU", "mirror.example")))
 
-def test_discovery_uses_both_sources_and_rejects_ru(monkeypatch):
+def test_discovery_uses_mirrormanager_without_country_filter(monkeypatch):
     calls = []
     def fake(url, limit):
         calls.append(url)
@@ -31,12 +31,45 @@ def test_discovery_uses_both_sources_and_rejects_ru(monkeypatch):
                          ("DE", "mirror.dogado.de"))
     monkeypatch.setattr(speed, "_download", fake)
     assert speed.discover("45") == [
+        ("https://mirror.yandex.ru/fedora/", "RU"),
         ("https://mirrors.xtom.ee/fedora/", "EE"),
         ("https://mirror.dogado.de/fedora/", "DE"),
     ]
     assert len(calls) == 2
-    assert "country=FI%2CSE%2CEE%2CDE%2CNL%2CDK" in calls[0]
+    assert "country=" not in calls[0]
     assert "page_size=500" in calls[1]
+
+
+def test_country_override_filters_registered_mirrors(monkeypatch):
+    calls = []
+    def fake(url, limit):
+        calls.append(url)
+        if "metalink?" in url:
+            return _xml("https://de.example/repo/repodata/repomd.xml",
+                        "https://fi.example/repo/repodata/repomd.xml")
+        return _registry(("DE", "de.example"), ("FI", "fi.example"))
+    monkeypatch.setattr(speed, "_download", fake)
+    assert speed.discover("45", country="fi") == [("https://fi.example/repo/", "FI")]
+    assert "country=FI" in calls[0]
+
+
+def test_unknown_registry_hosts_fail_closed(monkeypatch):
+    def fake(url, limit):
+        if "metalink?" in url:
+            return _xml("https://unknown.example/repo/repodata/repomd.xml",
+                        "https://known.example/repo/repodata/repomd.xml")
+        return _registry(("BR", "known.example"))
+    monkeypatch.setattr(speed, "_download", fake)
+    assert speed.discover("45") == [("https://known.example/repo/", "BR")]
+
+
+def test_invalid_discovery_settings_rejected():
+    for country in ("", "FIN", "F1", "🇫🇮", "FI,DE"):
+        with pytest.raises(ValueError):
+            speed.discover("45", country=country)
+    for count in (0, 25, True, "8"):
+        with pytest.raises(ValueError):
+            speed.discover("45", max_mirrors=count)
 
 def test_metalink_rejects_unsafe_urls():
     assert speed.parse_metalink(_xml(
@@ -77,20 +110,19 @@ def test_no_unapproved_probes(monkeypatch):
     monkeypatch.setattr(speed, "probe", lambda *args: pytest.fail("unexpected probe"))
     assert speed.benchmark("45") == []
 
-def test_round_robin_countries(monkeypatch):
+def test_discovery_preserves_mirrormanager_priority_and_limit(monkeypatch):
     urls = [f"https://de{i}.example/repo/repodata/repomd.xml" for i in range(9)]
-    urls += ["https://fi.example/repo/repodata/repomd.xml",
-             "https://ee.example/repo/repodata/repomd.xml"]
+    urls += ["https://fi.example/repo/repodata/repomd.xml"]
     def fake(url, limit):
         if "metalink?" in url:
             return _xml(*urls)
         return _registry(*([("DE", f"de{i}.example") for i in range(9)] +
-                           [("FI", "fi.example"), ("EE", "ee.example")]))
+                           [("FI", "fi.example")]))
     monkeypatch.setattr(speed, "_download", fake)
     result = speed.discover("45")
     assert len(result) == 8
-    assert [country for _, country in result[:3]] == ["FI", "EE", "DE"]
-    assert ("https://fi.example/repo/", "FI") in result
+    assert [country for _, country in result] == ["DE"] * 8
+    assert speed.discover("45", max_mirrors=10)[-1] == ("https://fi.example/repo/", "FI")
 
 def test_range_is_recorded(monkeypatch):
     index = (b'<repomd xmlns="http://linux.duke.edu/metadata/repo">'

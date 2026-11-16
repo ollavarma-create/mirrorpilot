@@ -13,8 +13,16 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, build_opener
 from time import monotonic
 
-from mirrorpilot.speed import COUNTRIES, MAX_LIST, _download, _base_from_metalink
+from mirrorpilot.speed import MAX_LIST, _download, _base_from_metalink
 from mirrorpilot.check import SafeRedirectHandler
+
+def _valid_country(country: str) -> bool:
+    """Accept registered ISO-style country labels and the configured source."""
+    return country == "Configured" or (
+        isinstance(country, str) and len(country) == 2
+        and country.isascii() and country.isalpha() and country.isupper()
+    )
+
 
 @dataclass(frozen=True)
 class AuditResult:
@@ -40,7 +48,7 @@ def audit(base: str, country: str, release: str, repo: str = "fedora") -> AuditR
 
     No package installation, DNF cache access, or configuration modification.
     """
-    if country not in (*COUNTRIES, "Configured") or not release.isdigit() or len(release) > 3:
+    if not _valid_country(country) or not release.isdigit() or len(release) > 3:
         return AuditResult("unsupported", "Invalid country or release", base)
     if repo not in ("fedora", "updates"):
         return AuditResult("unsupported", "Unsupported repository", base)
@@ -49,7 +57,7 @@ def audit(base: str, country: str, release: str, repo: str = "fedora") -> AuditR
             or not p.hostname or p.port not in (None, 443)):
         return AuditResult("unsupported", "HTTPS mirror base URL required", base)
     name = f"fedora-{release}" if repo == "fedora" else f"updates-released-f{release}"
-    query = urlencode({"repo": name, "arch": "x86_64", "country": ",".join(COUNTRIES)})
+    query = urlencode({"repo": name, "arch": "x86_64"})
     try:
         reference = _download("https://mirrors.fedoraproject.org/metalink?" + query, MAX_LIST)
         expected = reference_hash(reference)
@@ -146,7 +154,7 @@ def _hash_stream(url: str, algorithm: str, expected_size: int | None, progress=N
 
 def audit_referenced(base: str, country: str, release: str, progress=None) -> AuditResult:
     """Verify three metadata kinds with streaming, without changing DNF."""
-    if country not in COUNTRIES or not release.isdigit() or len(release) > 3:
+    if not _valid_country(country) or not release.isdigit() or len(release) > 3:
         return AuditResult("unsupported", "Invalid country or release", base)
     if _base_from_metalink(base + "repodata/repomd.xml") != base:
         return AuditResult("unsupported", "HTTPS mirror base URL required", base)
