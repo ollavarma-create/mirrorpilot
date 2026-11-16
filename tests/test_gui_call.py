@@ -25,3 +25,14 @@ def test_gui_diagnostics_call_matches_signature():
     # Worker supplies progress by keyword, not as part of positional args.
     positional = [object()] * len(args_tuple.elts)
     signature.bind(*positional, progress=lambda *args: None)
+
+
+def test_about_dialog_contains_project_identity_and_license():
+    source = (Path(__file__).resolve().parents[1] / "mirrorpilot" / "app.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    methods = [node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name == "show_about"]
+    assert len(methods) == 1
+    assert "GPL-3.0-only" in source
+    assert "https://github.com/ollavarma-create/mirrorpilot" in source
+    assert "not affiliated with the Fedora Project" in source
+    assert "AI-assisted" in source
