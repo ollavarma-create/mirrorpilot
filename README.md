@@ -6,9 +6,14 @@ MirrorPilot helps you investigate slow or broken Fedora repository mirrors, comp
 
 > **Status:** experimental alpha (`0.1.0a1`). The AppImage has been locally tested on Fedora KDE 45 (Wayland); diagnostic development and field tests also took place on Fedora 44. Other releases and environments need further validation. The project is not affiliated with the Fedora Project.
 
-![MirrorPilot main window showing Fedora repositories, tested mirrors, and diagnostics](docs/images/mirrorpilot-main.png)
+![MirrorPilot main window showing current configured mirror](docs/images/check-current.png)
 
-*Mirror comparison and diagnostic results.*
+*Check current results.*
+
+![MirrorPilot main window showing Fedora repositories, tested mirrors, and diagnostics](docs/images/find-better-mirrors.png)
+
+*Find better mirrors results.*
+
 
 ## Why MirrorPilot?
 
@@ -77,7 +82,7 @@ No `sudo` is needed to run MirrorPilot. If you already have a local checkout, up
 4. Select a verified alternative and click **Copy DNF5 configuration command…**. Read the command and inspect **Configuration origins…** before applying it.
 5. If you choose to change the configuration, run the copied command **yourself** in a terminal, then use **Verify effective settings**.
 
-![MirrorPilot dialog showing the copyable DNF5 configuration command](docs/images/mirrorpilot-command.png)
+![MirrorPilot dialog showing the copyable DNF5 configuration command](docs/images/dnf5-configuration.png)
 
 *Review and copy the DNF5 command before making changes yourself.*
 
@@ -103,9 +108,15 @@ echo "DNF5 exit code: $?"
 
 For `dnf5 check-update`, exit code **100** means updates are available, **0** means no updates are available, and **1** indicates an error. A working Fedora 44 mirror does not prove that the same server carries Fedora 45.
 
-![MirrorPilot successful DNF5 effective-settings verification dialog](docs/images/mirrorpilot-verification.png)
+![MirrorPilot successful DNF5 effective-settings verification dialog](docs/images/dnf5-verification.png)
 
-*Check effective DNF5 settings after running the command.*
+*Check effective DNF5 settings after running the command. Settings not changed in this example.*
+
+### Change settings
+
+You may override default country and set how many mirrors are tested in the settings dialog:
+
+![Mirror discovery settings](docs/images/mirror-discovery-settings.png)
 
 ## What the results mean
 
