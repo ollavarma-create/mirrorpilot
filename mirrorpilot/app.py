@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import sys
+from importlib.metadata import PackageNotFoundError, version
 from dataclasses import replace
 from PySide6.QtCore import QObject, QThread, Signal, Slot, QTimer, Qt, QSettings
 from PySide6.QtGui import QColor, QBrush
@@ -104,6 +105,9 @@ class MainWindow(QMainWindow):
         self.settings_button = QPushButton("Settings…")
         self.settings_button.clicked.connect(self.show_settings)
         actions.addWidget(self.settings_button)
+        self.about_button = QPushButton("About…")
+        self.about_button.clicked.connect(self.show_about)
+        actions.addWidget(self.about_button)
         layout.addLayout(actions)
         layout.addWidget(QLabel("Configured repositories"))
         self.table = QTableWidget(0, 4)
@@ -220,6 +224,36 @@ class MainWindow(QMainWindow):
             url = self.repos[row].baseurl.strip()
             enabled = url.startswith("https://") and "$" not in url and " " not in url
         self.check_button.setEnabled(enabled)
+
+    def show_about(self):
+        """Display project identity without opening a browser or changing DNF."""
+        try:
+            app_version = version("mirrorpilot")
+        except PackageNotFoundError:
+            app_version = "development"
+        dialog = QDialog(self)
+        dialog.setWindowTitle("About MirrorPilot")
+        dialog.resize(480, 260)
+        layout = QVBoxLayout(dialog)
+        heading = QLabel(f"<h2>MirrorPilot {app_version}</h2>", dialog)
+        layout.addWidget(heading)
+        description = QLabel(
+            "Read-only Fedora DNF5 mirror diagnostics.\\n"
+            "Compare mirror performance, repository indexes and selected metadata.\\n\\n"
+            "License: GPL-3.0-only\\n"
+            "Project: https://github.com/ollavarma-create/mirrorpilot\\n\\n"
+            "MirrorPilot is an independent open-source project and is not "
+            "affiliated with the Fedora Project.\\n"
+            "Development is AI-assisted, with human review and testing.",
+            dialog,
+        )
+        description.setWordWrap(True)
+        description.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        layout.addWidget(description)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, parent=dialog)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        dialog.exec()
 
     def mirror_preferences(self):
         """Read and validate persistent preferences before each scan."""
