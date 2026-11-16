@@ -34,15 +34,13 @@ The **Installed** Fedora version comes from the system; **Diagnose release** sel
 
 ## Download the alpha AppImage
 
-**MirrorPilot v0.1.0a2 (x86_64)** — [GitHub Releases](https://github.com/ollavarma-create/mirrorpilot/releases)
+**[Download MirrorPilot v0.1.0a2 AppImage (x86_64)](https://github.com/ollavarma-create/mirrorpilot/releases/download/v0.1.0a2/MirrorPilot-0.1.0a2-x86_64.AppImage)** · [Release notes and SHA256SUMS](https://github.com/ollavarma-create/mirrorpilot/releases/tag/v0.1.0a2)
 
 The new AppImage is **58,538,488 bytes (55.83 MiB)**, down from **279,595,512 bytes (266.64 MiB)** for the earlier locally built `0.1.0a1` AppImage. That is a **79.1% size reduction** (about **4.8× smaller**, saving **210.82 MiB**). These figures compare the specific tested artifacts, not necessarily every build of either version. The release is built through GitHub Actions with an automated headless startup smoke test; the latest functional and GUI tests were performed on **Fedora KDE 45 (Wayland)**. Earlier Fedora 44 field tests informed development, but compatibility with other Fedora versions is **not yet verified**.
 
-**Release status:** The `v0.1.0a2` release asset will be available from GitHub Releases once the release is published. Until then, use the artifact from a successful manual GitHub Actions CI run. A CI artifact is a test build, not a published release.
-
 MirrorPilot is intended for **Fedora Linux with a working DNF5 installation**. At startup it checks the operating system and DNF5 availability and reports unsupported environments rather than attempting repository diagnostics. It is not a general-purpose Linux mirror manager.
 
-When the release is published, download `MirrorPilot-0.1.0a2-x86_64.AppImage` and `SHA256SUMS` from the **same release**, then run:
+Download `MirrorPilot-0.1.0a2-x86_64.AppImage` and `SHA256SUMS` from the **same release**, then run:
 
 ```bash
 sha256sum -c SHA256SUMS
