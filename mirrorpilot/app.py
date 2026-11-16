@@ -39,6 +39,59 @@ class Worker(QObject):
         except Exception as exc:
             self.finished.emit(None, str(exc))
 
+class MirrorSettingsDialog(QDialog):
+    """Self-contained dialog; avoid Python closures capturing Qt child widgets."""
+
+    def __init__(self, settings: QSettings, parent=None):
+        super().__init__(parent)
+        self._settings = settings
+        self.setWindowTitle("Mirror discovery settings")
+        layout = QVBoxLayout(self)
+        explanation = QLabel(
+            "Automatic uses Fedora MirrorManager's regional selection. "
+            "Override only when you want mirrors registered in a specific country."
+        )
+        explanation.setWordWrap(True)
+        layout.addWidget(explanation)
+        form = QFormLayout()
+        self.country_edit = QLineEdit(self)
+        country = str(settings.value("mirror/country", "") or "").strip().upper()
+        if country and (len(country) != 2 or not country.isascii() or not country.isalpha()):
+            country = ""
+        self.country_edit.setText(country)
+        self.country_edit.setMaxLength(2)
+        self.country_edit.setPlaceholderText("Automatic (leave empty), or ISO code e.g. FI")
+        form.addRow("Country override:", self.country_edit)
+        self.mirror_count = QSpinBox(self)
+        self.mirror_count.setRange(1, 24)
+        try:
+            count = int(settings.value("mirror/count", 8))
+        except (TypeError, ValueError):
+            count = 8
+        self.mirror_count.setValue(max(1, min(count, 24)))
+        form.addRow("Mirrors to benchmark:", self.mirror_count)
+        layout.addLayout(form)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
+            parent=self,
+        )
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def accept(self):
+        country = self.country_edit.text().strip().upper()
+        if country and (len(country) != 2 or not country.isascii() or not country.isalpha()):
+            QMessageBox.warning(
+                self, "Invalid country",
+                "Enter a two-letter ISO country code or leave blank.",
+            )
+            return
+        self._settings.setValue("mirror/country", country)
+        self._settings.setValue("mirror/count", self.mirror_count.value())
+        super().accept()
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -281,47 +334,16 @@ class MainWindow(QMainWindow):
     def show_settings(self):
         if self.running:
             return
-        dialog = QDialog(self)
-        dialog.setWindowTitle("Mirror discovery settings")
-        layout = QVBoxLayout(dialog)
-        explanation = QLabel(
-            "Automatic uses Fedora MirrorManager's regional selection. "
-            "Override only when you want mirrors registered in a specific country."
-        )
-        explanation.setWordWrap(True)
-        layout.addWidget(explanation)
-        form = QFormLayout()
-        country = QLineEdit(dialog)
-        selected, count = self.mirror_preferences()
-        country.setText(selected or "")
-        country.setMaxLength(2)
-        country.setPlaceholderText("Automatic (leave empty), or ISO code e.g. FI")
-        form.addRow("Country override:", country)
-        mirror_count = QSpinBox(dialog)
-        mirror_count.setRange(1, 24)
-        mirror_count.setValue(count)
-        form.addRow("Mirrors to benchmark:", mirror_count)
-        layout.addLayout(form)
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
-            parent=dialog,
-        )
-        def save():
-            value = country.text().strip().upper()
-            if value and (len(value) != 2 or not value.isascii() or not value.isalpha()):
-                QMessageBox.warning(dialog, "Invalid country", "Enter a two-letter ISO country code or leave blank.")
-                return
-            self.settings.setValue("mirror/country", value)
-            self.settings.setValue("mirror/count", mirror_count.value())
+        dialog = MirrorSettingsDialog(self.settings, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            country, count = self.mirror_preferences()
             self.scan_button.setToolTip(
-                f"Benchmark up to {mirror_count.value()} MirrorManager mirrors "
-                f"({'automatic' if not value else value} country selection). Read-only."
+                f"Benchmark up to {count} MirrorManager mirrors "
+                f"({country or 'automatic'} country selection). Read-only."
             )
-            dialog.accept()
-        buttons.accepted.connect(save)
-        buttons.rejected.connect(dialog.reject)
-        layout.addWidget(buttons)
-        dialog.exec()
+        # The dialog is owned by the main window; release it while the Qt
+        # event loop is still running, rather than during interpreter teardown.
+        dialog.deleteLater()
 
     def show_config_origins(self):
         row = self.table.currentRow()
