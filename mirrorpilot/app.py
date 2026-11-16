@@ -3,13 +3,13 @@ from __future__ import annotations
 
 import sys
 from dataclasses import replace
-from PySide6.QtCore import QObject, QThread, Signal, Slot, QTimer, Qt
+from PySide6.QtCore import QObject, QThread, Signal, Slot, QTimer, Qt, QSettings
 from PySide6.QtGui import QColor, QBrush
 from PySide6.QtWidgets import (
     QApplication, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMainWindow,
     QMessageBox, QPushButton, QTableWidget, QTableWidgetItem, QTextEdit,
     QVBoxLayout, QWidget, QAbstractItemView, QComboBox, QToolButton,
-    QDialog, QDialogButtonBox,
+    QDialog, QDialogButtonBox, QSpinBox, QFormLayout,
 )
 from mirrorpilot.check import check_baseurl
 from mirrorpilot.repos import get_repositories, _version
@@ -43,6 +43,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("MirrorPilot — DNF5 diagnostics (read-only)")
         self.resize(1120, 680)
+        self.settings = QSettings("MirrorPilot", "MirrorPilot")
         self.repos = []
         self.results = []
         self.current_result = None
@@ -85,7 +86,7 @@ class MainWindow(QMainWindow):
         actions.addWidget(self.current_button)
         self.scan_label = "Find better mirrors"
         self.scan_button = QPushButton(self.scan_label)
-        self.scan_button.setToolTip("Discover and benchmark up to 8 country-approved mirrors; check indexes and verify metadata on the fastest matching mirror. Read-only.")
+        self.scan_button.setToolTip("Discover and benchmark MirrorManager mirrors using Settings; verify metadata on the fastest matching mirror. Read-only.")
         self.scan_button.clicked.connect(self.start_scan)
         actions.addWidget(self.scan_button)
         self.check_button = QPushButton("Check selected (advanced)")
@@ -100,6 +101,9 @@ class MainWindow(QMainWindow):
         )
         self.conflicts_button.clicked.connect(self.show_config_origins)
         actions.addWidget(self.conflicts_button)
+        self.settings_button = QPushButton("Settings…")
+        self.settings_button.clicked.connect(self.show_settings)
+        actions.addWidget(self.settings_button)
         layout.addLayout(actions)
         layout.addWidget(QLabel("Configured repositories"))
         self.table = QTableWidget(0, 4)
@@ -217,6 +221,62 @@ class MainWindow(QMainWindow):
             enabled = url.startswith("https://") and "$" not in url and " " not in url
         self.check_button.setEnabled(enabled)
 
+    def mirror_preferences(self):
+        """Read and validate persistent preferences before each scan."""
+        country = str(self.settings.value("mirror/country", "") or "").strip().upper()
+        if country and (len(country) != 2 or not country.isascii() or not country.isalpha()):
+            country = ""
+        try:
+            count = int(self.settings.value("mirror/count", 8))
+        except (TypeError, ValueError):
+            count = 8
+        return country or None, max(1, min(count, 24))
+
+    def show_settings(self):
+        if self.running:
+            return
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Mirror discovery settings")
+        layout = QVBoxLayout(dialog)
+        explanation = QLabel(
+            "Automatic uses Fedora MirrorManager's regional selection. "
+            "Override only when you want mirrors registered in a specific country."
+        )
+        explanation.setWordWrap(True)
+        layout.addWidget(explanation)
+        form = QFormLayout()
+        country = QLineEdit(dialog)
+        selected, count = self.mirror_preferences()
+        country.setText(selected or "")
+        country.setMaxLength(2)
+        country.setPlaceholderText("Automatic (leave empty), or ISO code e.g. FI")
+        form.addRow("Country override:", country)
+        mirror_count = QSpinBox(dialog)
+        mirror_count.setRange(1, 24)
+        mirror_count.setValue(count)
+        form.addRow("Mirrors to benchmark:", mirror_count)
+        layout.addLayout(form)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
+            parent=dialog,
+        )
+        def save():
+            value = country.text().strip().upper()
+            if value and (len(value) != 2 or not value.isascii() or not value.isalpha()):
+                QMessageBox.warning(dialog, "Invalid country", "Enter a two-letter ISO country code or leave blank.")
+                return
+            self.settings.setValue("mirror/country", value)
+            self.settings.setValue("mirror/count", mirror_count.value())
+            self.scan_button.setToolTip(
+                f"Benchmark up to {mirror_count.value()} MirrorManager mirrors "
+                f"({'automatic' if not value else value} country selection). Read-only."
+            )
+            dialog.accept()
+        buttons.accepted.connect(save)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        dialog.exec()
+
     def show_config_origins(self):
         row = self.table.currentRow()
         repo_id = (self.repos[row].repo_id if 0 <= row < len(self.repos)
@@ -293,6 +353,7 @@ class MainWindow(QMainWindow):
         self.running = True
         self.scan_button.setEnabled(False)
         self.current_button.setEnabled(False)
+        self.settings_button.setEnabled(False)
         self.repo_choice.setEnabled(False)
         self.version.setEnabled(False)
         self.verify_button.setEnabled(False)
@@ -319,13 +380,15 @@ class MainWindow(QMainWindow):
                            if r.repo_id == self.scan_repo and r.status == "enabled"), None)
         self.configured_url = configured.baseurl.strip() if configured and configured.baseurl.strip().startswith("https://") else None
         self.scan_key = (self.scan_release, self.scan_repo, self.configured_url)
+        self.scan_country, self.scan_mirror_count = self.mirror_preferences()
         if current_only:
             self.run_job(check_current_repository,
                          (self.scan_release, self.scan_repo, self.configured_url),
                          self.scan_finished, self.scan_progress)
         else:
             self.run_job(run_diagnostics,
-                         (self.scan_release, 1, self.scan_repo, self.configured_url),
+                         (self.scan_release, 1, self.scan_repo, self.configured_url,
+                          self.scan_country, self.scan_mirror_count),
                          self.scan_finished, self.scan_progress)
 
     def scan_finished(self, results, error):
@@ -335,6 +398,7 @@ class MainWindow(QMainWindow):
         self.current_button.setText(self.current_label)
         self.current_button.setEnabled(True)
         self.scan_button.setEnabled(True)
+        self.settings_button.setEnabled(True)
         self.repo_choice.setEnabled(True)
         self.version.setEnabled(True)
         self.selection_changed()
@@ -516,6 +580,7 @@ class MainWindow(QMainWindow):
         self.preview_button.setEnabled(False)
         self.scan_button.setEnabled(False)
         self.current_button.setEnabled(False)
+        self.settings_button.setEnabled(False)
         self.verify_button.setText("Verifying selected metadata…")
         entry = self.results[row]
         self.pending_row = row
@@ -527,6 +592,7 @@ class MainWindow(QMainWindow):
         self.running = False
         self.scan_button.setEnabled(True)
         self.current_button.setEnabled(True)
+        self.settings_button.setEnabled(True)
         self.verify_button.setText("Verify selected metadata")
         if error:
             self.details.setPlainText("Verification failed: " + error)
