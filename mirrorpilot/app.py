@@ -673,7 +673,15 @@ class MainWindow(QMainWindow):
         self.selected_mirror()
 
 def main():
+    from mirrorpilot.environment import check_environment
     app = QApplication(sys.argv)
+    environment = check_environment()
+    if not environment.supported:
+        QMessageBox.critical(
+            None, "Unsupported environment",
+            environment.message + "\\n\\nNo changes have been made to your system.",
+        )
+        return 1
     window = MainWindow()
     window.show()
     return app.exec()
