@@ -4,7 +4,7 @@
 
 MirrorPilot helps you investigate slow or broken Fedora repository mirrors, compare alternatives, and review a DNF5 configuration command **before deciding whether to run it yourself**. It does not install packages, change repositories, modify DNF caches, or request administrator privileges.
 
-> **Status:** experimental alpha (`0.1.0a1`). The AppImage has been locally tested on Fedora KDE 45 (Wayland); diagnostic development and field tests also took place on Fedora 44. Other releases and environments need further validation. The project is not affiliated with the Fedora Project.
+> **Status:** experimental alpha (`0.1.0a2`). The latest application and AppImage acceptance tests were performed on Fedora KDE 45 (Wayland); earlier diagnostic development and field tests also took place on Fedora 44. Other Fedora releases and environments need further validation. The project is not affiliated with the Fedora Project.
 
 ![MirrorPilot main window showing current configured mirror](docs/images/check-current.png)
 
@@ -34,25 +34,29 @@ The **Installed** Fedora version comes from the system; **Diagnose release** sel
 
 ## Download the alpha AppImage
 
-**[Download MirrorPilot v0.1.0a1 for Fedora 45 (x86_64)](https://github.com/ollavarma-create/mirrorpilot/releases/download/v0.1.0a1/MirrorPilot-0.1.0a1-Fedora45-x86_64.AppImage)** · [Release notes and SHA256 checksum](https://github.com/ollavarma-create/mirrorpilot/releases/tag/v0.1.0a1)
+**MirrorPilot v0.1.0a2 (x86_64)** — [GitHub Releases](https://github.com/ollavarma-create/mirrorpilot/releases)
 
-This is an **experimental, locally built AppImage**, tested on Fedora KDE 45 with Wayland. Compatibility with older Fedora releases is **not yet verified**. MirrorPilot requires a Linux system with **DNF5**; Ubuntu and other systems without DNF5 are not supported. The AppImage is not a general-purpose Linux mirror manager.
+The new AppImage is **58,538,488 bytes (55.83 MiB)**, down from **279,595,512 bytes (266.64 MiB)** for the earlier locally built `0.1.0a1` AppImage. That is a **79.1% size reduction** (about **4.8× smaller**, saving **210.82 MiB**). These figures compare the specific tested artifacts, not necessarily every build of either version. The release is built through GitHub Actions with an automated headless startup smoke test; the latest functional and GUI tests were performed on **Fedora KDE 45 (Wayland)**. Earlier Fedora 44 field tests informed development, but compatibility with other Fedora versions is **not yet verified**.
 
-Download the AppImage and the accompanying `SHA256SUMS` file from the same release, then in the download directory run:
+**Release status:** The `v0.1.0a2` release asset will be available from GitHub Releases once the release is published. Until then, use the artifact from a successful manual GitHub Actions CI run. A CI artifact is a test build, not a published release.
+
+MirrorPilot is intended for **Fedora Linux with a working DNF5 installation**. At startup it checks the operating system and DNF5 availability and reports unsupported environments rather than attempting repository diagnostics. It is not a general-purpose Linux mirror manager.
+
+When the release is published, download `MirrorPilot-0.1.0a2-x86_64.AppImage` and `SHA256SUMS` from the **same release**, then run:
 
 ```bash
 sha256sum -c SHA256SUMS
-chmod +x MirrorPilot-0.1.0a1-Fedora45-x86_64.AppImage
-./MirrorPilot-0.1.0a1-Fedora45-x86_64.AppImage
+chmod +x MirrorPilot-0.1.0a2-x86_64.AppImage
+./MirrorPilot-0.1.0a2-x86_64.AppImage
 ```
 
-The checksum check should print `OK`. No administrator privileges are needed to launch MirrorPilot. **Automated AppImage packaging is still under development**; this release uses the locally tested build, not the experimental CI artifact.
+The checksum check should print `OK`. No administrator privileges or separate Python/PySide6 installation are needed to launch the AppImage. The SHA256 checksum verifies the downloaded bytes against the accompanying checksum file; obtain both files from the trusted release page.
 
-**Beta testers wanted:** If you try it on Fedora 43, 44, 45, or another DNF5-based distribution, please [open an issue](https://github.com/ollavarma-create/mirrorpilot/issues) with your Fedora version, desktop/session (Wayland or X11), whether the AppImage launches, and any non-sensitive error output. Reports of successful runs are useful too. Never paste credentials, private repository URLs, or other sensitive configuration data.
+**Alpha testers wanted:** If you try it on Fedora 43, 44, 45, or a newer Fedora release, please [open an issue](https://github.com/ollavarma-create/mirrorpilot/issues) with the Fedora version, desktop/session (Wayland or X11), whether the AppImage launches, and any non-sensitive error output. Reports of successful runs are useful too. Never paste credentials, private repository URLs, or other sensitive configuration data.
 
 ## Install and run
 
-For **source installation**, requires Linux with DNF5, Python 3.11+, and Qt/PySide6. The primary development and field-test environment is Fedora KDE. The AppImage download above does not require a separate Python or PySide6 installation.
+For **source installation**, use Fedora Linux with DNF5, Python 3.11+, and Qt/PySide6. The primary development and field-test environment is Fedora KDE. The AppImage download above does not require a separate Python or PySide6 installation.
 
 From a clone of this repository:
 
@@ -146,7 +150,7 @@ python -m pip install -e '.[test]'
 python -m pytest -q
 ```
 
-In the Fedora 45 development environment, the latest reported run completed with **254 passed, 1 skipped** (16 November 2026). This is a local test result, not a claim of exhaustive coverage or CI certification.
+On Fedora 45, a recent local run completed with **262 passed, 1 skipped** (16 November 2026), before the additional DNF5 verification-message regression test was added. GitHub Actions also runs the automated tests and an Ubuntu-based, headless AppImage startup smoke test. The smoke test verifies startup and Qt loading, not Fedora-specific GUI functionality. These results are not a claim of exhaustive coverage.
 
 Bug reports are especially welcome for DNF5 configuration differences, mirror discovery timeouts, Fedora release changes, and confusing diagnostic messages. Please include the Fedora release, steps to reproduce, and relevant non-sensitive logs.
 
