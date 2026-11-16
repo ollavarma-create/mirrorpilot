@@ -239,13 +239,14 @@ def probe(base: str, country: str) -> MirrorResult:
         return MirrorResult(base, country, "error", None, None, 0, str(exc))
 
 
-def benchmark(release: str, repo: str = "fedora", progress=None) -> list[MirrorResult]:
+def benchmark(release: str, repo: str = "fedora", progress=None,
+              country: str | None = None, max_mirrors: int = MAX_MIRRORS) -> list[MirrorResult]:
     """Benchmark registered mirrors; optional progress callback receives (done, total).
 
     The callback runs on the caller's thread. GUI callers must bridge it
     through a Qt signal rather than updating widgets directly.
     """
-    candidates = discover(release, repo)
+    candidates = discover(release, repo, country=country, max_mirrors=max_mirrors)
     if progress is not None:
         progress(0, len(candidates))
     results = []
