@@ -25,6 +25,17 @@ def test_matching_mirror_index(monkeypatch):
     result = audit.audit("https://example.org/fedora/", "EE", "45")
     assert result.status == "index-match"
     assert len(calls) == 2
+    assert "country=" not in calls[0]
+
+def test_global_country_audit_and_configured_metadata(monkeypatch):
+    manifest = b"<repomd/>"
+    digest = hashlib.sha256(manifest).hexdigest()
+    def fake(url, limit):
+        return _metalink(digest) if "metalink?" in url else manifest
+    monkeypatch.setattr(audit, "_download", fake)
+    assert audit.audit("https://example.org/fedora/", "BR", "45").status == "index-match"
+    assert audit.audit("https://example.org/fedora/", "Configured", "45").status == "index-match"
+
 
 def test_different_mirror_index(monkeypatch):
     def fake(url, limit):
@@ -35,7 +46,7 @@ def test_different_mirror_index(monkeypatch):
 def test_reject_invalid_without_network(monkeypatch):
     monkeypatch.setattr(audit, "_download", lambda *args: (_ for _ in ()).throw(AssertionError("network")))
     assert audit.audit("http://example.org/fedora/", "EE", "45").status == "unsupported"
-    assert audit.audit("https://example.org/fedora/", "RU", "45").status == "unsupported"
+    assert audit.audit("https://example.org/fedora/", "R1", "45").status == "unsupported"
 
 def _manifest(href="repodata/primary.xml.zck", content=b"valid", size=None):
     digest = hashlib.sha256(content).hexdigest()
@@ -50,6 +61,7 @@ def test_metadata_verified(monkeypatch):
     events = []
     result = audit.audit_referenced("https://example.org/fedora/", "EE", "45", progress=lambda *args: events.append(args))
     assert result.status == "metadata-match"
+    assert audit.audit_referenced("https://example.org/fedora/", "Configured", "45").status == "metadata-match"
     assert events[0] == ("primary", 1, 1, 0, 5)
 
 def test_metadata_checksum_mismatch(monkeypatch):
