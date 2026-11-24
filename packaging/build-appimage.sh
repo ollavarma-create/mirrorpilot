@@ -123,14 +123,41 @@ exec "$BIN/mirrorpilot" "$@"
 EOF
 chmod +x "$APPDIR/AppRun"
 
-# --- appimagetool ---
-TOOL="$ROOT/dist/appimagetool-x86_64.AppImage"
-curl -fL --retry 3 -o "$TOOL" \
-  "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage"
+# --- Verified AppImage packaging tools ---
+TOOL_VERSION="1.9.1"
+TOOL_SHA256="ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0"
+
+RUNTIME_VERSION="20251108"
+RUNTIME_SHA256="2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d"
+
+TOOLS_DIR="$(mktemp -d)"
+trap 'rm -rf -- "$TOOLS_DIR"' EXIT
+
+TOOL="$TOOLS_DIR/appimagetool.AppImage"
+RUNTIME="$TOOLS_DIR/runtime-x86_64"
+
+curl --fail --location --retry 3 \
+  "https://github.com/AppImage/appimagetool/releases/download/${TOOL_VERSION}/appimagetool-x86_64.AppImage" \
+  -o "$TOOL"
+
+printf '%s  %s\n' "$TOOL_SHA256" "$TOOL" | sha256sum -c -
+
+curl --fail --location --retry 3 \
+  "https://github.com/AppImage/type2-runtime/releases/download/${RUNTIME_VERSION}/runtime-x86_64" \
+  -o "$RUNTIME"
+
+printf '%s  %s\n' "$RUNTIME_SHA256" "$RUNTIME" | sha256sum -c -
+
 chmod +x "$TOOL"
 
+OUTPUT="$ROOT/dist/MirrorPilot-$VERSION-x86_64.AppImage"
+
 ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 "$TOOL" \
-  "$APPDIR" "$ROOT/dist/MirrorPilot-$VERSION-x86_64.AppImage"
+  --runtime-file "$RUNTIME" \
+  "$APPDIR" "$OUTPUT"
+
+test -s "$OUTPUT"
+chmod +x "$OUTPUT"
 
 (cd "$ROOT/dist" && sha256sum MirrorPilot-*.AppImage > SHA256SUMS)
 
